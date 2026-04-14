@@ -1,0 +1,7 @@
+node_modules/
+.specs/
+CLAUDE.md
+AGENTS.md
+coverage/
+*.log
+.DS_Store

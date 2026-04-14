@@ -1,0 +1,13 @@
+{
+  "name": "consensflow-cc",
+  "owner": {
+    "name": "ngvoicu"
+  },
+  "plugins": [
+    {
+      "name": "consensflow-cc",
+      "source": ".",
+      "description": "Consensus-driven multi-agent orchestration for Claude Code. Named agents discuss, reach consensus, then implement."
+    }
+  ]
+}

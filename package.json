@@ -1,0 +1,13 @@
+{
+  "name": "consensflow-cc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Consensus-driven multi-agent orchestration for Claude Code",
+  "author": "ngvoicu",
+  "license": "MIT",
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.4",
+    "vitest": "^4.0.0"
+  }
+}
