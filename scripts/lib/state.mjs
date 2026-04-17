@@ -5,8 +5,20 @@ import os from "node:os";
 
 const DEFAULT_STATE = { version: 1, discussions: [] };
 
+// Session IDs are emitted by scripts/session-hook.mjs as `cf-<base36>-<hex>`.
+// Anything outside that shape is rejected so a hostile env var can't escape
+// the state directory.
+const SESSION_ID_RE = /^cf-[a-z0-9-]{1,64}$/;
+
 /**
  * Get the state file path for a workspace.
+ *
+ * Layout: <dataDir>/state/<slug>-<hash>[/<sessionId>]/state.json
+ *
+ * When CONSENSFLOW_SESSION_ID is present and well-formed, it is appended as a
+ * subdirectory so concurrent sessions against the same workspace don't
+ * stomp each other's state.
+ *
  * @param {string} workspaceRoot
  * @returns {string}
  */
@@ -14,7 +26,16 @@ export function getStatePath(workspaceRoot) {
   const dataDir = process.env.CLAUDE_PLUGIN_DATA || path.join(os.tmpdir(), "consensflow-cc");
   const slug = path.basename(workspaceRoot);
   const hash = crypto.createHash("sha256").update(workspaceRoot).digest("hex").slice(0, 8);
-  return path.join(dataDir, "state", `${slug}-${hash}`, "state.json");
+
+  const parts = [dataDir, "state", `${slug}-${hash}`];
+
+  const sessionId = process.env.CONSENSFLOW_SESSION_ID;
+  if (sessionId && SESSION_ID_RE.test(sessionId)) {
+    parts.push(sessionId);
+  }
+
+  parts.push("state.json");
+  return path.join(...parts);
 }
 
 /**

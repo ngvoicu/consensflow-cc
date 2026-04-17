@@ -144,6 +144,7 @@ describe("pruneState", () => {
 describe("getStatePath", () => {
   beforeEach(() => {
     process.env.CLAUDE_PLUGIN_DATA = "/tmp/plugin-data";
+    delete process.env.CONSENSFLOW_SESSION_ID;
   });
 
   it("uses CLAUDE_PLUGIN_DATA with workspace hash", () => {
@@ -156,5 +157,24 @@ describe("getStatePath", () => {
     const p1 = getStatePath("/project/one");
     const p2 = getStatePath("/project/two");
     expect(p1).not.toBe(p2);
+  });
+
+  it("appends a well-formed CONSENSFLOW_SESSION_ID as a subdirectory", () => {
+    process.env.CONSENSFLOW_SESSION_ID = "cf-abc123-deadbeef";
+    const p = getStatePath("/project/root");
+    expect(p).toContain("/cf-abc123-deadbeef/state.json");
+  });
+
+  it("ignores a malformed CONSENSFLOW_SESSION_ID", () => {
+    process.env.CONSENSFLOW_SESSION_ID = "../../evil";
+    const p = getStatePath("/project/root");
+    expect(p).not.toContain("..");
+    expect(p).not.toContain("evil");
+  });
+
+  it("ignores an empty CONSENSFLOW_SESSION_ID", () => {
+    process.env.CONSENSFLOW_SESSION_ID = "";
+    const p = getStatePath("/project/root");
+    expect(p).toContain("state.json");
   });
 });

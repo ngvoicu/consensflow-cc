@@ -1,11 +1,16 @@
 {
   "name": "consensflow-cc",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Consensus-driven multi-agent orchestration for Claude Code",
   "author": "ngvoicu",
   "license": "MIT",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.4",
     "vitest": "^4.0.0"

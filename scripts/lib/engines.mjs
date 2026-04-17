@@ -1,35 +1,92 @@
 import { binaryAvailable, runCommand } from "./process.mjs";
 
 /**
+ * Default invocation timeout in milliseconds (180 s).
+ * Protects the critical path from unbounded engine runs
+ * (e.g., `codex --full-auto` looping forever).
+ */
+export const DEFAULT_INVOKE_TIMEOUT_MS = 180_000;
+
+/**
  * Engine configurations for all supported engines.
  * Models are free strings — passed through to the CLI as-is.
+ *
+ * `buildArgs(model, prompt, { write })` returns the full argv vector.
+ * Engines that accept a write/auto flag place it *before* the prompt
+ * positional so CLI parsers (notably `codex exec`) don't attach it
+ * to the prompt string.
  */
 export const ENGINE_CONFIGS = {
   codex: {
     binary: "codex",
     versionArgs: ["--version"],
-    buildArgs: (model, prompt) => ["exec", "--model", model, prompt],
-    writeArgs: ["--full-auto"],
+    buildArgs: (model, prompt, opts = {}) => {
+      const args = ["exec", "--model", model];
+      if (opts.write) args.push("--full-auto");
+      args.push(prompt);
+      return args;
+    },
+    supportsWrite: true,
   },
   opencode: {
     binary: "opencode",
     versionArgs: ["--version"],
-    buildArgs: (model, prompt) => ["run", "-m", model, prompt],
-    writeArgs: ["--dangerously-skip-permissions"],
+    buildArgs: (model, prompt, opts = {}) => {
+      const args = ["run", "-m", model];
+      if (opts.write) args.push("--dangerously-skip-permissions");
+      args.push(prompt);
+      return args;
+    },
+    supportsWrite: true,
   },
   gemini: {
     binary: "gemini",
     versionArgs: ["--version"],
+    // Gemini headless is read-only — write flag is ignored.
     buildArgs: (model, prompt) => ["-p", prompt, "-m", model, "-o", "text"],
-    writeArgs: null, // Gemini headless is read-only
+    supportsWrite: false,
   },
   claude: {
     binary: null, // Native — no subprocess needed
     versionArgs: null,
     buildArgs: null,
-    writeArgs: null,
+    supportsWrite: false,
   },
 };
+
+/**
+ * Classify a spawn result to decide whether a retry is worthwhile.
+ * Transient failures (spawn errors, timeouts, generic non-zero) retry;
+ * clearly permanent errors (unknown model / command / auth) do not.
+ * @param {{ exitCode: number|null, error: object|null, signal: string|null, stderr: string }} result
+ * @returns {boolean}
+ */
+export function shouldRetry(result) {
+  // Timeouts are not retried — the work is already slow.
+  if (result.signal === "SIGTERM" || result.signal === "SIGKILL") return false;
+
+  // Spawn-level errors (ENOENT, etc.) are terminal for this binary.
+  if (result.error) return false;
+
+  // Success — nothing to retry.
+  if (result.exitCode === 0) return false;
+
+  const stderr = (result.stderr || "").toLowerCase();
+  const permanent = [
+    "not found",
+    "unknown model",
+    "invalid model",
+    "unrecognized",
+    "unauthorized",
+    "authentication",
+    "permission denied",
+    "invalid api key",
+    "no such",
+  ];
+  if (permanent.some((needle) => stderr.includes(needle))) return false;
+
+  return true;
+}
 
 /**
  * Check if an engine is available on the system.
@@ -74,21 +131,22 @@ export function invokeEngine(engineName, model, prompt, options = {}) {
     return null;
   }
 
-  let args = config.buildArgs(model, prompt);
+  const write = Boolean(options.write) && config.supportsWrite;
+  const args = config.buildArgs(model, prompt, { write });
 
-  // Add write flags if requested and supported
-  if (options.write && config.writeArgs) {
-    args = [...args, ...config.writeArgs];
-  }
+  // Always apply a ceiling so a single engine can't stall the discussion.
+  const timeout = Number.isFinite(options.timeout) && options.timeout > 0
+    ? options.timeout
+    : DEFAULT_INVOKE_TIMEOUT_MS;
 
   const start = Date.now();
 
   // First attempt
-  let result = runCommand(config.binary, args, { timeout: options.timeout });
+  let result = runCommand(config.binary, args, { timeout });
 
-  // Retry once on failure (non-zero exit or spawn error)
-  if (result.exitCode !== 0 || result.error) {
-    result = runCommand(config.binary, args, { timeout: options.timeout });
+  // Retry once on transient failure only.
+  if (shouldRetry(result)) {
+    result = runCommand(config.binary, args, { timeout });
   }
 
   const durationMs = Date.now() - start;

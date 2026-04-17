@@ -82,6 +82,10 @@ Create team JSON in `~/.config/consensflow-cc/teams/`:
 }
 ```
 
+`timeout` is in **seconds** (bare numbers are treated as seconds; suffix with
+`ms`, `s`, or `m` for explicit units when passing `--timeout` to the companion
+script). The default invocation timeout is 180 s if none is specified.
+
 ## Commands
 
 | Command | Purpose |
@@ -97,9 +101,9 @@ Create team JSON in `~/.config/consensflow-cc/teams/`:
 
 ```bash
 npm install
-npx vitest run              # Run all tests
-npx vitest run --coverage   # With coverage report
-npx vitest watch            # Watch mode
+npm test                    # Run all tests
+npm run test:coverage       # With coverage report
+npm run test:watch          # Watch mode
 ```
 
 85 tests passing. 87.5% line coverage.

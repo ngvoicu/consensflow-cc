@@ -14,7 +14,7 @@ vi.mock("node:fs", () => ({
   existsSync: vi.fn(),
 }));
 
-const { loadTeamConfig, listTeams, resolveTeam } = await import("./config.mjs");
+const { loadTeamConfig, listTeams, resolveTeam, assertSafeTeamName } = await import("./config.mjs");
 
 const TEAMS_DIR = path.join(os.homedir(), ".config", "consensflow-cc", "teams");
 
@@ -121,5 +121,37 @@ describe("resolveTeam", () => {
     fs.existsSync.mockReturnValue(false);
 
     expect(() => resolveTeam()).toThrow(/no teams/i);
+  });
+});
+
+describe("assertSafeTeamName", () => {
+  it("accepts safe names", () => {
+    expect(() => assertSafeTeamName("product-team")).not.toThrow();
+    expect(() => assertSafeTeamName("review_team.v2")).not.toThrow();
+    expect(() => assertSafeTeamName("a")).not.toThrow();
+  });
+
+  it("rejects path-traversal attempts", () => {
+    expect(() => assertSafeTeamName("../../evil")).toThrow(/invalid team name/i);
+    expect(() => assertSafeTeamName("foo/bar")).toThrow(/invalid team name/i);
+    expect(() => assertSafeTeamName("foo\\bar")).toThrow(/invalid team name/i);
+    expect(() => assertSafeTeamName("")).toThrow(/invalid team name/i);
+    expect(() => assertSafeTeamName(".hidden")).toThrow(/invalid team name/i);
+  });
+
+  it("rejects non-string input", () => {
+    expect(() => assertSafeTeamName(null)).toThrow(/invalid team name/i);
+    expect(() => assertSafeTeamName(undefined)).toThrow(/invalid team name/i);
+    expect(() => assertSafeTeamName(42)).toThrow(/invalid team name/i);
+  });
+});
+
+describe("loadTeamConfig — path safety", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("refuses to read a traversal-style team name", () => {
+    expect(() => loadTeamConfig("../../evil")).toThrow(/invalid team name/i);
+    // Must NOT have touched the filesystem.
+    expect(fs.readFileSync).not.toHaveBeenCalled();
   });
 });

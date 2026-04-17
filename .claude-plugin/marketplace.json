@@ -7,7 +7,20 @@
     {
       "name": "consensflow-cc",
       "source": ".",
-      "description": "Consensus-driven multi-agent orchestration for Claude Code. Named agents discuss, reach consensus, then implement."
+      "version": "0.2.0",
+      "description": "Consensus-driven multi-agent orchestration for Claude Code. Named agents discuss, reach consensus, then implement.",
+      "author": "ngvoicu",
+      "license": "MIT",
+      "category": "orchestration",
+      "keywords": [
+        "multi-agent",
+        "consensus",
+        "orchestration",
+        "codex",
+        "opencode",
+        "gemini"
+      ],
+      "repository": "https://github.com/ngvoicu/consensflow"
     }
   ]
 }
