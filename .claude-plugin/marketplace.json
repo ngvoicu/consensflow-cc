@@ -1,15 +1,21 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "consensflow-cc",
   "owner": {
     "name": "ngvoicu"
   },
+  "metadata": {
+    "description": "Consensflow-cc marketplace containing the consensflow-cc plugin for consensus-driven multi-agent orchestration."
+  },
   "plugins": [
     {
       "name": "consensflow-cc",
-      "source": ".",
-      "version": "0.2.0",
+      "source": "./",
+      "version": "0.2.1",
       "description": "Consensus-driven multi-agent orchestration for Claude Code. Named agents discuss, reach consensus, then implement.",
-      "author": "ngvoicu",
+      "author": {
+        "name": "ngvoicu"
+      },
       "license": "MIT",
       "category": "orchestration",
       "keywords": [
@@ -20,7 +26,7 @@
         "opencode",
         "gemini"
       ],
-      "repository": "https://github.com/ngvoicu/consensflow"
+      "repository": "https://github.com/ngvoicu/consensflow-cc"
     }
   ]
 }

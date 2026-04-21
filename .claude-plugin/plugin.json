@@ -1,6 +1,6 @@
 {
   "name": "consensflow-cc",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Consensus-driven multi-agent orchestration for Claude Code. Named agents discuss, reach consensus, then implement.",
   "author": {
     "name": "ngvoicu"
