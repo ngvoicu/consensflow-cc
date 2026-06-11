@@ -1,0 +1,28 @@
+{
+  "name": "consensflow-cc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Claude Code-native one-at-a-time named-agent prompt routing (a Claude Code plugin).",
+  "type": "module",
+  "keywords": [
+    "claude-code-plugin",
+    "consensflow",
+    "prompt-routing",
+    "agents"
+  ],
+  "files": [
+    ".claude-plugin",
+    "bin",
+    "commands",
+    "hooks",
+    "lib",
+    "scripts",
+    "skills",
+    "README.md",
+    "AGENTS.md"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm test"
+  }
+}

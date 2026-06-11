@@ -1,0 +1,15 @@
+{
+  "name": "consensflow",
+  "displayName": "ConsensFlow",
+  "version": "0.1.0",
+  "author": {
+    "name": "ngvoicu"
+  },
+  "description": "Consult one named AI participant at a time (Claude Code, Codex, Pi, OpenCode CLIs run one-shot with a session handoff) without leaving Claude Code.",
+  "keywords": [
+    "consensflow",
+    "second-opinion",
+    "multi-agent",
+    "prompt-routing"
+  ]
+}
