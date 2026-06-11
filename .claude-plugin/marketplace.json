@@ -1,0 +1,24 @@
+{
+  "name": "consensflow-cc",
+  "owner": {
+    "name": "ngvoicu"
+  },
+  "metadata": {
+    "description": "Marketplace for the ConsensFlow Claude Code plugin (this repo hosts both the marketplace and the plugin).",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "consensflow",
+      "source": "./",
+      "description": "Consult one named AI participant at a time (Claude Code, Codex, Pi, OpenCode CLIs run one-shot with a session handoff, plus gpt-image-2 image participants) without leaving Claude Code.",
+      "category": "workflow",
+      "keywords": [
+        "consensflow",
+        "second-opinion",
+        "multi-agent",
+        "prompt-routing"
+      ]
+    }
+  ]
+}

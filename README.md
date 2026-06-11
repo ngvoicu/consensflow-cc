@@ -61,17 +61,23 @@ Claude relays @zeus's answer — and never acts on it without your approval
 | OpenCode | `opencode` |
 | Pi | `pi` |
 
-**Load the plugin** (pick one):
+**Install from GitHub** (this repo is its own plugin marketplace):
 
 ```bash
-# Per-session, great for development — edits picked up on next start:
+claude plugin marketplace add ngvoicu/consensflow-cc
+claude plugin install consensflow@consensflow-cc
+```
+
+Get newer versions later with `claude plugin marketplace update consensflow-cc`; uninstall with `claude plugin uninstall consensflow`.
+
+**Or load from a local clone** (for development — edits picked up on next start):
+
+```bash
 claude --plugin-dir /path/to/consensflow-cc
 
 # Validate the plugin layout any time:
 claude plugin validate /path/to/consensflow-cc
 ```
-
-For a permanent install, add the directory to a plugin marketplace and `claude plugin install consensflow@<marketplace>` — see the Claude Code plugin docs.
 
 **Verify** inside a session: `/consensflow:cf doctor` shows which engine CLIs are installed; `/consensflow:cf status` shows your participants.
 
