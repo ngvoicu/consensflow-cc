@@ -131,6 +131,34 @@ The answer is relayed inline. Every run is saved under the ConsensFlow home — 
 
 After a write-capable run, review what changed yourself (e.g. `git status` / `git diff` in your repo) before keeping it.
 
+### The handoff — what a participant actually sees
+
+Every run (unless you pass `--no-handoff`) embeds a **handoff**: a one-shot snapshot of your current Claude Code session, built fresh at call time. Knowing what's in it tells you when to trust it and when to restate context yourself.
+
+```text
+Your live Claude Code session
+   │  the plugin hooks stash the session's transcript path per workspace
+   │  (Bash subprocesses get no session env from the host — the stash is the bridge)
+   ▼
+cf.mjs parses the transcript JSONL at call time: "User: … / Lead: …" turns,
+tool calls noted, thinking redacted, sidechains/noise skipped,
+earlier participants' answers kept near-whole
+   ▼
+capped at 120 KB (~30k tokens) — keeps the MOST RECENT tail,
+older history drops off behind a truncation marker
+   ▼
+embedded in the packet, between the mode line and your question
+```
+
+What that means in practice:
+
+- **It's a rendering, not the raw context.** The participant gets readable conversation text, never your model's actual context window — so a 1M-token lead session can never overflow a 200k participant.
+- **Short and medium sessions hand off essentially everything.** Only when the serialized text outgrows 120 KB does the oldest part fall away; a very long session hands off just the recent stretch.
+- **You can see what rode along.** Every run prints a `Handoff:` line — `attached (NN KB)`, `skipped (--no-handoff)`, or `empty — no session transcript stashed` (the hooks aren't running, e.g. plugin not loaded). `packet.md` in the run dir is byte-for-byte what the participant received.
+- **A handoff is context, never a precondition.** If the stash is missing the run still works — the participant just answers from your prompt and whatever it reads in the workspace, and the `Handoff:` line tells you that's what happened.
+- **Cross-pollination is deliberate.** Earlier participants' answers are kept near-whole, so `@zeus Do you agree with Athena?` works. For a genuinely independent opinion, ask that participant first.
+- **When old context matters, restate it.** If a decision from early in a long session is the point of your question, put it (or the relevant diff) in the prompt or `--context` brief — don't assume it's still inside the tail.
+
 ### Images — the `@pygmalion` participant
 
 `@pygmalion` is an **image** participant: mention it with a description and it generates a picture (gpt-image-2) instead of returning text — riding your existing **Codex CLI login** (`codex login`, ChatGPT Plus/Pro; no extra key).
