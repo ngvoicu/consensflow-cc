@@ -172,7 +172,7 @@ async function handleParticipants(tokens, cwd) {
 
     if (presetRef) {
       throw new Error(
-        `Unknown preset: ${presetRef}\n\nPresets: ${listPresetIds().join(", ")} (rename any with --name).\n\nOr create a custom participant:\n  /consensflow:participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--roles <r>] [--tools <readonly|workspace-write|full-auto>]`,
+        `Unknown preset: ${presetRef}\n\nPresets: ${listPresetIds().join(", ")} (rename any with --name).\n\nOr create a custom participant:\n  /consensflow:participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--tools <readonly|workspace-write|full-auto>]`,
       );
     }
     throw new Error(addUsage());
@@ -290,8 +290,8 @@ function flagBool(flags, name) {
 }
 
 const PRESET_OVERRIDE_FLAGS = ["name", "id", "cwd", "timeoutMs", "description"];
-const CUSTOM_ADD_FLAGS = ["name", "id", "kind", "model", "provider", "effort", "thinking", "roles", "tools", "toolsPolicy", "skills", "skillsPolicy", "agent", "cwd", "timeoutMs", "maxTurns", "description"];
-const CUSTOM_SHAPE_FLAGS = ["kind", "model", "provider", "effort", "thinking", "roles", "tools", "toolsPolicy", "skills", "skillsPolicy", "agent", "maxTurns"];
+const CUSTOM_ADD_FLAGS = ["name", "id", "kind", "model", "provider", "effort", "thinking", "tools", "toolsPolicy", "skills", "skillsPolicy", "agent", "cwd", "timeoutMs", "maxTurns", "description"];
+const CUSTOM_SHAPE_FLAGS = ["kind", "model", "provider", "effort", "thinking", "tools", "toolsPolicy", "skills", "skillsPolicy", "agent", "maxTurns"];
 
 function assertAllowedFlags(flags, allowed, context) {
   const allowedSet = new Set(allowed);
@@ -324,7 +324,6 @@ function customParticipantInput(name, flags) {
     provider: flags.provider,
     effort: flags.effort,
     thinking: flags.thinking,
-    roles: flags.roles,
     toolsPolicy: flags.tools ?? flags.toolsPolicy,
     skillsPolicy: flags.skills ?? flags.skillsPolicy,
     agent: flags.agent,
@@ -340,7 +339,7 @@ function addUsage() {
     "Usage:",
     "  /consensflow:participants add <preset> [--name <name>]   # from a preset, optionally renamed",
     "  /consensflow:participants add all                         # every preset",
-    "  /consensflow:participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--thinking <t>] [--roles <r>] [--tools <readonly|workspace-write|full-auto>] [--cwd <subdir>]",
+    "  /consensflow:participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--thinking <t>] [--tools <readonly|workspace-write|full-auto>] [--cwd <subdir>]",
     "",
     `Presets: ${listPresetIds().join(", ")}`,
   ].join("\n");
@@ -361,7 +360,7 @@ function formatParticipants(participants) {
       "/consensflow:participants add zeus                      # add a preset",
       "/consensflow:participants add zeus --name Deepreview    # preset backend, custom name",
       "/consensflow:participants add all                       # every preset",
-      "/consensflow:participants add --name Builder --kind codex --model gpt-5.5 --roles implementer --tools workspace-write",
+      "/consensflow:participants add --name Builder --kind codex --model gpt-5.5 --tools workspace-write",
       "```",
     ].join("\n");
   }
@@ -374,11 +373,8 @@ function formatParticipantLine(p) {
   const cwd = p.cwd ? ` cwd=${p.cwd}` : "";
   const skills = p.kind === "pi" ? ` skills=${p.skillsPolicy ?? "default"}` : "";
   const preset = p.preset ? ` preset=${p.preset}` : "";
-  // Show the policy actually used at runtime: an advisory role saved with a write policy still runs
-  // read-only (effectiveToolsPolicy), and the listing should reflect that, not the misleading config.
-  const effective = effectiveToolsPolicy(p);
-  const tools = effective === p.toolsPolicy ? `tools=${p.toolsPolicy}` : `tools=${effective} (advisory; configured ${p.toolsPolicy})`;
-  const head = `- @${p.id} (${p.kind}${model}${effort}${cwd}${skills}${preset}) roles=${(p.roles ?? []).join(",") || "-"} ${tools}`;
+  // effectiveToolsPolicy normalizes a missing policy to the readonly default.
+  const head = `- @${p.id} (${p.kind}${model}${effort}${cwd}${skills}${preset}) tools=${effectiveToolsPolicy(p)}`;
   return p.description ? `${head}\n    ${p.description}` : head;
 }
 
@@ -414,7 +410,7 @@ as consensflow-pi's roster, copy entries to share):
 /consensflow:participants add zeus --name Deepreview    # preset backend, your own name
 /consensflow:participants add all                       # every preset
 /consensflow:participants add --name Builder --kind codex --model gpt-5.5 --effort high \\
-    --roles implementer --tools workspace-write         # fully custom
+    --tools workspace-write                             # fully custom, write-capable
 /consensflow:participants show @zeus
 /consensflow:participants remove @zeus
 /consensflow:status                                     # roster + latest run
@@ -429,9 +425,8 @@ For the lead (via the Bash tool), the CLI subcommands are \`status\` | \`doctor\
 Rules:
 
 - Send to one participant at a time.
-- A participant runs with its configured tools (a \`workspace-write\`/\`full-auto\` participant can
-  edit and run); participants whose roles are purely advisory (reviewer/council/knowledge) are
-  always forced read-only.
+- Participants are read-only unless you explicitly configure \`--tools workspace-write\` or
+  \`full-auto\` (a write-capable participant can edit files and run commands).
 - One-shot: participants do not remember previous calls; each call re-sends the current session handoff.
 - The current Claude Code session remains the lead and decides what to implement.
 `;

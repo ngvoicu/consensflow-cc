@@ -37,7 +37,7 @@ Claude (the lead) executes via the Bash tool:
    node ".../bin/cf.mjs" run @zeus --prompt-file "~/.consensflow/consensflow-cc/workspaces/<ws>/pending-prompt.md"
    ▼
 cf.mjs builds a "packet" for @zeus:
-   • who @zeus is        (claude-code · claude-opus-4-8 · max · reviewer)
+   • who @zeus is        (claude-code · claude-opus-4-8 · max)
    • mode line           (read-only — or read-write if you made it write-capable)
    • handoff             (a snapshot of THIS session, from the transcript stash the hooks maintain)
    • your question
@@ -97,10 +97,10 @@ Or fully custom (any model string the engine accepts — values pass through ver
 
 ```text
 /consensflow:participants add --name Sonnet --kind claude-code --model claude-sonnet-4-6 --effort high
-/consensflow:participants add --name Builder --kind opencode --model openrouter/moonshotai/kimi-k2.6 --roles implementer --tools workspace-write
+/consensflow:participants add --name Builder --kind opencode --model openrouter/moonshotai/kimi-k2.6 --tools workspace-write
 ```
 
-> **Read-only vs write.** By default a participant is a **reviewer** and can only read. Advisory roles (`reviewer` / `council` / `knowledge`) are *always* forced read-only, even if you pass a write flag. For a write-capable participant use `--roles implementer --tools workspace-write` (or `full-auto`).
+> **Read-only vs write.** By default a participant can only read. For one that can actually edit files and run commands, pass `--tools workspace-write` (or `full-auto`) — write access is never implicit.
 
 Config lives in `~/.consensflow/consensflow-cc/participants.json` — per tool, same format as consensflow-pi's roster (`~/.consensflow/consensflow-pi/participants.json`); copy entries between the files to share a participant across both tools.
 

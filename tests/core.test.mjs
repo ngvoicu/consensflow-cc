@@ -56,7 +56,6 @@ test("participant CRUD persists global user-level JSON", async () => {
       kind: "codex",
       model: "gpt-5.5",
       effort: "xhigh",
-      roles: ["implementer", "reviewer"],
       toolsPolicy: "workspace-write",
     });
     assert.equal(athena.id, "athena");
@@ -74,7 +73,6 @@ test("createPacket is conversational, mode-aware, and carries handoff + diff", a
       kind: "pi",
       model: "openrouter/anthropic/claude-opus-4.7",
       toolsPolicy: "readonly",
-      roles: ["reviewer"],
     });
     const packet = await createPacket({
       cwd,
@@ -97,7 +95,6 @@ test("createPacket gives write-capable participants a read-write mode line", asy
       name: "Builder",
       kind: "claude-code",
       toolsPolicy: "workspace-write",
-      roles: ["implementer"],
     });
     const packet = await createPacket({ cwd, participant, kind: "ask", task: "add a health check endpoint" });
     assert.match(packet, /Read-write: you can read and modify this workspace/);
@@ -159,7 +156,7 @@ test("every preset survives normalize + runner invocation with correct flags (al
     assert.equal(participant.id, preset.id, `${preset.preset}: id survives the pipeline`);
     assert.equal(participant.kind, preset.kind, `${preset.preset}: kind`);
     assert.equal(participant.model, preset.model, `${preset.preset}: model`);
-    assert.equal(effectiveToolsPolicy(participant), "readonly", `${preset.preset}: presets are advisory → readonly`);
+    assert.equal(effectiveToolsPolicy(participant), "readonly", `${preset.preset}: presets are readonly`);
 
     if (preset.kind === "image") {
       assert.throws(() => buildRunnerInvocation(participant, "/tmp/packet.md", "/repo"), /image participants/);
@@ -251,7 +248,7 @@ test("readonly enforcement reaches every engine: claude allow+deny lists, openco
 test("image participants are valid config but never reach the CLI runner (backstop)", () => {
   // Image generation is handled upstream in cf.mjs (Codex backend); the runner must throw loudly
   // if one ever slips through to the spawn path.
-  const participant = normalizeParticipant({ name: "Pygmalion", kind: "image", roles: ["reviewer"], toolsPolicy: "readonly" });
+  const participant = normalizeParticipant({ name: "Pygmalion", kind: "image", toolsPolicy: "readonly" });
   assert.equal(participant.kind, "image");
   assert.throws(() => buildRunnerInvocation(participant, "/tmp/packet.md", "/repo"), /Codex backend/);
 });
@@ -270,56 +267,25 @@ test("effectiveTimeoutMs: per-call override wins over participant config, then t
   assert.equal(effectiveTimeoutMs({}, undefined), 10 * 60 * 1000);
 });
 
-test("advisory roles are forced read-only; configured tools are honored otherwise", () => {
-  // Purely-advisory participant: a write policy is coerced away (the safety guard).
-  const reviewer = { id: "athena", name: "Athena", kind: "codex", toolsPolicy: "workspace-write", roles: ["reviewer"] };
-  assert.equal(effectiveToolsPolicy(reviewer), "readonly");
-  assert.equal(participantForKind(reviewer, "ask").toolsPolicy, "readonly");
-
-  // Implementer: the configured write policy IS honored.
-  const builder = { id: "builder", name: "Builder", kind: "claude-code", toolsPolicy: "workspace-write", roles: ["implementer"] };
+test("toolsPolicy alone gates write access; a missing policy fails safe to readonly", () => {
+  // Explicit write policies are honored as configured.
+  const builder = { id: "builder", name: "Builder", kind: "claude-code", toolsPolicy: "workspace-write" };
   assert.equal(effectiveToolsPolicy(builder), "workspace-write");
   assert.equal(participantForKind(builder, "ask").toolsPolicy, "workspace-write");
+  assert.equal(effectiveToolsPolicy({ id: "auto", name: "Auto", kind: "codex", toolsPolicy: "full-auto" }), "full-auto");
 
-  // A mixed role set that includes a non-advisory role keeps its full-auto policy.
-  const lead = { id: "lead", name: "Lead", kind: "claude-code", toolsPolicy: "full-auto", roles: ["implementer", "reviewer"] };
-  assert.equal(effectiveToolsPolicy(lead), "full-auto");
+  // Explicit readonly stays readonly.
+  assert.equal(effectiveToolsPolicy({ id: "ro", name: "RO", kind: "pi", toolsPolicy: "readonly" }), "readonly");
 
-  // Explicit readonly stays readonly regardless of role.
-  const ro = { id: "ro", name: "RO", kind: "pi", toolsPolicy: "readonly", roles: ["implementer"] };
-  assert.equal(effectiveToolsPolicy(ro), "readonly");
-});
+  // Fail safe: a missing policy is readonly, and participantForKind materializes it.
+  const bare = { id: "bare", name: "Bare", kind: "codex" };
+  assert.equal(effectiveToolsPolicy(bare), "readonly");
+  assert.equal(participantForKind(bare, "ask").toolsPolicy, "readonly");
 
-test("effectiveToolsPolicy coerces every advisory role to readonly; non-advisory/empty roles honor the policy", () => {
-  assert.equal(effectiveToolsPolicy({ roles: ["reviewer"], toolsPolicy: "workspace-write" }), "readonly");
-  assert.equal(effectiveToolsPolicy({ roles: ["council"], toolsPolicy: "workspace-write" }), "readonly");
-  assert.equal(effectiveToolsPolicy({ roles: ["knowledge"], toolsPolicy: "full-auto" }), "readonly");
-  // A mix that includes a non-advisory role is not purely advisory -> honors the configured policy.
-  assert.equal(effectiveToolsPolicy({ roles: ["reviewer", "implementer"], toolsPolicy: "workspace-write" }), "workspace-write");
-  // Fail safe: an empty (or missing) roles set grants no write capability, regardless of the configured policy.
-  assert.equal(effectiveToolsPolicy({ roles: [], toolsPolicy: "workspace-write" }), "readonly");
-  assert.equal(effectiveToolsPolicy({ roles: [], toolsPolicy: "readonly" }), "readonly");
-  assert.equal(effectiveToolsPolicy({ toolsPolicy: "full-auto" }), "readonly");
-});
-
-test("normalizeParticipant rejects all-invalid roles so a misconfigured write policy cannot slip through", () => {
-  // --roles bogus would filter to [] and bypass the advisory->readonly coercion, leaving it write-capable.
-  assert.throws(
-    () => normalizeParticipant({ name: "X", kind: "codex", roles: "bogus", toolsPolicy: "workspace-write" }),
-    /roles must be one or more of/,
-  );
-  // Omitted roles fall back to the valid default (reviewer) and are coerced read-only.
-  const p = normalizeParticipant({ name: "Y", kind: "codex", toolsPolicy: "workspace-write" });
-  assert.deepEqual(p.roles, ["reviewer"]);
-  assert.equal(effectiveToolsPolicy(p), "readonly");
-  // A partially-valid roles list keeps the valid entries (does not throw).
-  const q = normalizeParticipant({ name: "Z", kind: "codex", roles: "implementer,bogus", toolsPolicy: "workspace-write" });
-  assert.deepEqual(q.roles, ["implementer"]);
-  assert.equal(effectiveToolsPolicy(q), "workspace-write");
-  // Whitespace/comma-only roles normalize to [] (no throw) but stay fail-safe: never write-capable.
-  const empty = normalizeParticipant({ name: "E", kind: "codex", roles: " , ", toolsPolicy: "workspace-write" });
-  assert.deepEqual(empty.roles, []);
-  assert.equal(effectiveToolsPolicy(empty), "readonly");
+  // normalizeParticipant defaults an omitted policy to readonly and rejects bogus values.
+  const p = normalizeParticipant({ name: "Y", kind: "codex" });
+  assert.equal(p.toolsPolicy, "readonly");
+  assert.throws(() => normalizeParticipant({ name: "X", kind: "codex", toolsPolicy: "bogus" }), /toolsPolicy must be one of/);
 });
 
 test("runParticipant rejects participant cwd that escapes workspace before spawning", async () => {
@@ -327,7 +293,7 @@ test("runParticipant rejects participant cwd that escapes workspace before spawn
     await assert.rejects(
       runParticipant({
         cwd,
-        participant: { id: "bad", name: "Bad", kind: "pi", roles: ["reviewer"], toolsPolicy: "readonly", cwd: "../outside" },
+        participant: { id: "bad", name: "Bad", kind: "pi", toolsPolicy: "readonly", cwd: "../outside" },
         packet: "# Packet",
         kind: "ask",
       }),

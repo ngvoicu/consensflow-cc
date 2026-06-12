@@ -9,7 +9,7 @@ Claude Code-native ConsensFlow package: a Claude Code **plugin** (skill + slash 
 - Named participants are ephemeral one-shot subagent calls (no memory between calls).
 - Each call's packet embeds a serialized, capped handoff of the current session plus the prompt; participants stay isolated one-shot subprocesses — no live/shared transcript, no ACP.
 - Participant config is global/user-level under `~/.consensflow/consensflow-cc/participants.json` — a per-tool roster (pi keeps its own under `~/.consensflow/consensflow-pi/`); same file format, copy entries to share.
-- Participants come from curated presets (`lib/presets.js`, renameable via `--name`) or fully custom definitions (`cf participants add --name … --kind … --model … --roles … --tools …`).
+- Participants come from curated presets (`lib/presets.js`, renameable via `--name`) or fully custom definitions (`cf participants add --name … --kind … --model … --tools …`).
 - Workspace state (run artifacts plus the hook-maintained `session.json` stash) is stored per workspace under the config home (`~/.consensflow/consensflow-cc/workspaces/<dir>-<hash>/`); ConsensFlow never creates a directory inside the project.
 - No hidden workflows: no spec-review command, no council/fan-out, no grill.
 
@@ -21,7 +21,7 @@ Claude Code-native ConsensFlow package: a Claude Code **plugin** (skill + slash 
   - `state.js` — global participant store (per-tool config root) + `normalizeParticipant` + the per-workspace `session.json` stash (`loadSession`/`saveSession`).
   - `packets.js` — `createPacket` (conversational, mode-aware, handoff + prompt).
   - `transcript.js` — Claude Code transcript JSONL → handoff text (defensive parse, sidechain/meta/noise skip, thinking redaction, ConsensFlow-run tool results kept near-whole for cross-pollination, byte-capped keep-tail). Replaces pi's `handoff.js`.
-  - `workflows.js` — `effectiveToolsPolicy` (advisory→readonly guard). Verbatim from pi.
+  - `workflows.js` — `effectiveToolsPolicy` (readonly-by-default tools policy). Verbatim from pi.
   - `runners.js` — per-engine invocation (`pi`/`claude-code`/`codex`/`opencode`) + output normalization + spawn/timeout. Deltas vs pi: `CHILD_ENV` (`CONSENSFLOW_CHILD=1`) on every child; `--bare` on claude children; image kind keeps the loud backstop throw (handled upstream).
   - `image.js` — `image`-kind generation: Codex Responses backend → gpt-image-2 (HTTP/SSE) + base64→PNG save. Ported from pi; pure helpers unit-tested.
   - `codex-auth.js` — reads `${CODEX_HOME|~/.codex}/auth.json` for the ChatGPT access token + account id (the CC analog of pi's `ctx.modelRegistry` openai-codex token). Read-only; refresh stays the codex CLI's job.
@@ -50,7 +50,7 @@ claude --plugin-dir .                      # load for a manual session (real eng
 - Custom participant creation is supported; model/effort strings pass through to the engine verbatim. Validation lives in `normalizeParticipant` (state.js).
 - Send to one participant at a time; reject multiple leading mentions.
 - Participants respond to the user's prompt as written; no injected ceremony terms.
-- Participants run with their configured tools; `effectiveToolsPolicy` forces read-only for purely-advisory roles. Per-engine enforcement: codex `--sandbox read-only` (OS-level), claude `--allowedTools` + `--disallowedTools` deny list, pi `--tools` allowlist, opencode `OPENCODE_PERMISSION={"edit":"deny","bash":"deny"}`. Claude/codex children get `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` stripped (subscription-login billing guard).
+- Participants run with their configured tools; `effectiveToolsPolicy` treats a missing policy as `readonly` (write access requires an explicit `workspace-write`/`full-auto`). Per-engine enforcement: codex `--sandbox read-only` (OS-level), claude `--allowedTools` + `--disallowedTools` deny list, pi `--tools` allowlist, opencode `OPENCODE_PERMISSION={"edit":"deny","bash":"deny"}`. Claude/codex children get `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` stripped (subscription-login billing guard).
 - Recursion guards: every child carries `CONSENSFLOW_CHILD=1`; hooks and `cf run` bail under it; claude children run `--bare`; pi children run `--no-extensions`.
 - Image participants (`kind: image`) bypass the CLI runner: handled in `cf.mjs` (`runImageParticipant`) with the prompt only (no packet/handoff), auth from `codex-auth.js`, PNG + result.json under the run dir. `buildRunnerInvocation` throws on `image` as a loud backstop so it can never silently reach the CLI path. `cf doctor` reports the codex login when image participants exist.
 - Consent gate: consulting is free and proactive; acting on a participant's response — or keeping a write-capable participant's edits — requires explicit user approval unless pre-authorized. Synced across `skills/consensflow/SKILL.md`, `commands/cf.md`, both hook context strings, and the CLI's run-output reminder; don't weaken one without the others (tests lock the phrases).

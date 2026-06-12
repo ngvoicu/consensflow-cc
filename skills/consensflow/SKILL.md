@@ -71,10 +71,10 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants presets                    
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add zeus                   # add a preset → @zeus
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add all                    # add every preset
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add zeus --name Deepreview # preset backend, renamed → @deepreview
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name Builder --kind codex --model gpt-5.5 --effort high --roles implementer --tools workspace-write   # fully custom, write-capable
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name Builder --kind codex --model gpt-5.5 --effort high --tools workspace-write   # fully custom, write-capable
 ```
 
-Presets (all read-only reviewers; the same model+effort family exists on every engine that runs it):
+Presets (all read-only; the same model+effort family exists on every engine that runs it):
 
 - **Fable 5** (Anthropic's top model — use for the questions that really matter): `@calliope`/`@clio`/`@euterpe`/`@thalia` (Claude Code max/xhigh/high/medium), `@orpheus`/`@linus`/`@erato` (Pi xhigh/high/medium, Anthropic auth), `@saga`/`@gunnlod`/`@kvasir` (OpenCode xhigh/high/medium via OpenRouter).
 - **Opus 4.8**: `@zeus`/`@apollo`/`@artemis` (Claude Code max/xhigh/medium), `@kronos`/`@atlas` (Pi xhigh/medium, Anthropic auth), `@baldr`/`@vali` (OpenCode xhigh/medium via OpenRouter; xhigh is the ceiling outside claude-code).
@@ -93,7 +93,7 @@ When the user's prompt addresses one configured participant — `@zeus What's th
 ## Invariants
 
 - **One at a time.** Send to exactly one participant per call. Never fan out to several participants automatically. If the user names several, ask which one first, or ask one and wait for its answer before asking the next.
-- **Read-only by default.** A participant reads but does not write unless explicitly made write-capable. Advisory roles (`reviewer` / `council` / `knowledge`) are *always* forced read-only by policy; write flags never reach them.
+- **Read-only by default.** A participant reads but does not write unless it was explicitly configured with `--tools workspace-write` or `full-auto`; a missing tools policy is treated as read-only.
 - **One-shot, no memory.** Each call is fresh. Continuity comes only from the handoff (re-sent each time), which already includes earlier participant replies — so a later participant can build on an earlier one (cross-pollination). For a genuinely *independent* opinion, ask that participant **first**, before others have replied — otherwise its handoff carries the prior answers and colors it.
 - **No live/shared transcript.** Participants get a one-shot serialized handoff, not a streamed or shared session. There is no shared room.
 - **The lead is always the decision-maker.** ConsensFlow routes a prompt and returns an answer; it never implements anything on its own. Acting on any answer goes through the gate above.
