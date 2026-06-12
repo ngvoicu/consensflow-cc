@@ -172,7 +172,7 @@ async function handleParticipants(tokens, cwd) {
 
     if (presetRef) {
       throw new Error(
-        `Unknown preset: ${presetRef}\n\nPresets: ${listPresetIds().join(", ")} (rename any with --name).\n\nOr create a custom participant:\n  cf participants add --name <name> --kind <pi|claude-code|codex|opencode> --model <model> [--effort <e>] [--roles <r>] [--tools <readonly|workspace-write|full-auto>]`,
+        `Unknown preset: ${presetRef}\n\nPresets: ${listPresetIds().join(", ")} (rename any with --name).\n\nOr create a custom participant:\n  cf participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--roles <r>] [--tools <readonly|workspace-write|full-auto>]`,
       );
     }
     throw new Error(addUsage());
@@ -340,7 +340,7 @@ function addUsage() {
     "Usage:",
     "  cf participants add <preset> [--name <name>]        # from a preset, optionally renamed",
     "  cf participants add all                              # every preset",
-    "  cf participants add --name <name> --kind <pi|claude-code|codex|opencode> --model <model> [--effort <e>] [--thinking <t>] [--roles <r>] [--tools <readonly|workspace-write|full-auto>] [--cwd <subdir>]",
+    "  cf participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--thinking <t>] [--roles <r>] [--tools <readonly|workspace-write|full-auto>] [--cwd <subdir>]",
     "",
     `Presets: ${listPresetIds().join(", ")}`,
   ].join("\n");
@@ -405,7 +405,8 @@ cf run @zeus --prompt-file question.md            # verbatim prompt from a file
 cf @zeus What do you think?                        # shorthand
 \`\`\`
 
-Add participants (config is global, ${configRoot()}/participants.json, shared with consensflow-pi):
+Add participants (config is global per tool, ${configRoot()}/participants.json — same format as
+consensflow-pi's roster, copy entries to share):
 
 \`\`\`text
 cf participants add zeus                           # from a preset

@@ -84,7 +84,7 @@ claude plugin validate /path/to/consensflow-cc
 
 ### Step 1 — Configure participants
 
-Same presets as consensflow-pi (47 curated combos — every model+effort family on every engine that runs it, plus the `@pygmalion` image preset; `cf participants presets` prints the full list):
+Same presets as consensflow-pi (47 curated presets — every model+effort family on every engine that runs it, including the `@pygmalion` image preset; `/consensflow:presets` prints the full list):
 
 ```text
 /consensflow:cf participants presets         # see all presets
