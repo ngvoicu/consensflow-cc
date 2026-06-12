@@ -36,6 +36,12 @@ test("tokenize handles quotes and parseOptions handles flags", () => {
     kind: "codex",
     model: "gpt-5.5",
   });
+  // `--no-*` negation flags are always boolean — they must never swallow the next token
+  // (this is how `run @zeus --no-handoff <prompt>` used to eat the prompt).
+  assert.deepEqual(parseOptions(["@zeus", "--no-handoff", "what", "about", "this?"]), {
+    positional: ["@zeus", "what", "about", "this?"],
+    flags: { "no-handoff": true },
+  });
 });
 
 test("slugify creates stable mentions", () => {

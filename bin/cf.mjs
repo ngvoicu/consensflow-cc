@@ -212,16 +212,23 @@ async function handleRun(tokens, cwd) {
   // Image participants bypass the CLI runner: prompt-only (no packet/handoff), Codex backend.
   if (participant.kind === "image") return await runImageParticipant(cwd, participant, prompt, parsed.flags);
 
+  // The run output reports what context rode along: a silently-empty handoff (missing session
+  // stash) looks identical to a full one from the participant's answer alone.
   let handoff = "";
+  let handoffSummary = "skipped (--no-handoff)";
   if (flagBool(parsed.flags, "handoff") ?? true) {
     handoff = stringFlag(parsed.flags["handoff-file"]) !== undefined
       ? await fs.readFile(String(parsed.flags["handoff-file"]), "utf8")
       : await collectHandoff(cwd);
+    handoffSummary = handoff.trim()
+      ? `attached (${Math.max(1, Math.round(Buffer.byteLength(handoff, "utf8") / 1024))} KB)`
+      : "empty — no session transcript stashed for this workspace (are the plugin hooks running?)";
   }
 
   const effective = participantForKind(participant, "ask");
   const packet = await createPacket({ cwd, participant: effective, kind: "ask", task: prompt, extraContext: stringFlag(parsed.flags.context), handoff });
   const result = await runParticipant({ cwd, participant: effective, packet, kind: "ask", timeoutMs: parsed.flags["timeout-ms"] });
+  result.handoffSummary = handoffSummary;
 
   if (parsed.flags.json === true) {
     console.log(JSON.stringify(result, null, 2));
@@ -378,6 +385,7 @@ function formatParticipantLine(p) {
 function renderRunResult(result) {
   const writeCapable = effectiveToolsPolicy(result.participant) !== "readonly";
   const lines = [`# @${result.participant.id}`, "", `Run: ${result.runId}`, `Exit: ${result.exitCode}${result.timedOut ? " (timed out)" : ""}`, `Artifacts: ${result.runDir}`];
+  if (result.handoffSummary) lines.push(`Handoff: ${result.handoffSummary}`);
   if (writeCapable) lines.push("", "> Write-capable run: this participant could edit files and run commands. Inspect what changed in the workspace (e.g. `git status` / `git diff` in a repo) and review it before keeping or building on it.");
   lines.push("", result.output);
   return lines.join("\n");
