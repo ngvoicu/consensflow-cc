@@ -23,7 +23,7 @@ A **Claude Code plugin** that routes one natural-language prompt to one named pa
 
 ## Load-bearing facts (easy to get wrong)
 
-- **The session transcript JSONL is internal/undocumented.** `lib/transcript.js` parses it defensively (skip unknown types, never throw) and `collectHandoff` degrades to `""` — a handoff is context, never a precondition. Hooks stash `transcript_path` into `.consensflow-cc/session.json` because Bash subprocesses get no session env from the host.
+- **The session transcript JSONL is internal/undocumented.** `lib/transcript.js` parses it defensively (skip unknown types, never throw) and `collectHandoff` degrades to `""` — a handoff is context, never a precondition. Hooks stash `transcript_path` into the workspace's `session.json` under `~/.consensflow/consensflow-cc/workspaces/…` because Bash subprocesses get no session env from the host.
 - **`CONSENSFLOW_CHILD=1` is the nesting guard.** Every engine child gets it (`CHILD_ENV` in runners.js); both hook scripts and `cf run` bail when it's set. `claude` children additionally run `--bare` so they don't load this plugin (the CC analog of pi children's `--no-extensions`).
 - **Advisory roles (`reviewer`/`council`/`knowledge`) are forced read-only** by `effectiveToolsPolicy`; write flags must never reach them. Enforcement is per engine in runners.js (codex sandbox, claude allow+deny lists, pi tools allowlist, `OPENCODE_PERMISSION` env).
 - **Per-tool config root:** `configRoot()` is `~/.consensflow/consensflow-cc` (CONSENSFLOW_HOME overrides the *parent* home; pi uses `…/consensflow-pi`). Same participants.json format in both — entries are copyable across tools.

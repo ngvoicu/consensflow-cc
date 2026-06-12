@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { codexAuthPath, loadCodexAuth } from "../lib/codex-auth.js";
 import { buildImageRequestBody, decodeChatGptAccountId, extractImageFromEvents, saveImagePng } from "../lib/image.js";
 import { spawnWithInput } from "../lib/runners.js";
-import { loadSession, saveSession } from "../lib/state.js";
+import { loadSession, saveSession, workspaceKey } from "../lib/state.js";
 import { collectHandoff, parseTranscriptJsonl, serializeClaudeTranscript } from "../lib/transcript.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -178,7 +178,10 @@ test("user-prompt hook routes a configured @mention to a run instruction with a 
     assert.match(context, /addresses the participant @zeus/);
     assert.match(context, /run @zeus --prompt-file/);
     assert.match(context, /without the user's approval/);
-    assert.equal(await readFile(path.join(dir, ".consensflow-cc", "pending-prompt.md"), "utf8"), "what about the cache?");
+    // The stash lives under the config home, keyed by workspace — never inside the project.
+    const promptFile = context.match(/--prompt-file "([^"]+)"/)[1];
+    assert.equal(promptFile, path.join(dir, "home", "consensflow-cc", "workspaces", workspaceKey(dir), "pending-prompt.md"));
+    assert.equal(await readFile(promptFile, "utf8"), "what about the cache?");
   });
 });
 
@@ -290,8 +293,8 @@ async function runCf(args, { ws, dir, fake }, extraEnv = {}) {
   });
 }
 
-async function latestPacket(ws) {
-  const current = JSON.parse(await readFile(path.join(ws, ".consensflow-cc", "current.json"), "utf8"));
+async function latestPacket(ws, dir) {
+  const current = JSON.parse(await readFile(path.join(dir, "home", "consensflow-cc", "workspaces", workspaceKey(ws), "current.json"), "utf8"));
   return {
     current,
     packet: await readFile(path.join(current.latestRunDir, "packet.md"), "utf8"),
@@ -323,7 +326,7 @@ test("e2e: all four engines run, parse, and persist artifacts through the real s
       assert.ok(run.stdout.includes(expect), `${ref}: parsed engine output`);
       assert.match(run.stdout, /get their approval before applying/, `${ref}: consent reminder`);
 
-      const { packet, result } = await latestPacket(ws);
+      const { packet, result } = await latestPacket(ws, dir);
       assert.match(packet, /# ConsensFlow Packet/);
       assert.match(packet, /Read-only: you can inspect the workspace/);
       assert.match(packet, /ping from the test/);
@@ -335,6 +338,9 @@ test("e2e: all four engines run, parse, and persist artifacts through the real s
       const packetSeen = engine === "opencode" ? dump.packetFromFile : dump.stdin;
       assert.ok(String(packetSeen ?? "").includes("# ConsensFlow Packet"), `${engine}: packet delivered`);
     }
+
+    // The relocation contract: a run never creates anything inside the project workspace.
+    assert.ok(!(await readdir(ws)).some((entry) => entry.startsWith(".consensflow")), "no .consensflow* dir in the workspace");
 
     // Engine-specific guards observed from inside the children.
     const claude = JSON.parse(await readFile(path.join(fake.out, "claude.json"), "utf8"));
@@ -365,7 +371,7 @@ test("e2e: the handoff from the session stash reaches the packet", async () => {
 
     // First run: no session stash -> no handoff section.
     assert.equal((await runCf(["run", "@zeus", "first", "question"], ctx)).exitCode, 0);
-    assert.doesNotMatch((await latestPacket(ws)).packet, /## Handoff — current session/);
+    assert.doesNotMatch((await latestPacket(ws, dir)).packet, /## Handoff — current session/);
 
     // Stash a transcript like the hooks would, then run again.
     const transcriptPath = path.join(dir, "session.jsonl");
@@ -386,13 +392,13 @@ test("e2e: the handoff from the session stash reaches the packet", async () => {
       else process.env.CONSENSFLOW_HOME = oldHome;
     }
     assert.equal((await runCf(["run", "@zeus", "second", "question"], ctx)).exitCode, 0);
-    const { packet } = await latestPacket(ws);
+    const { packet } = await latestPacket(ws, dir);
     assert.match(packet, /## Handoff — current session/);
     assert.match(packet, /User:\nlet's design the cache/);
     assert.match(packet, /Lead:\nI propose write-through/);
     // And --no-handoff suppresses it again.
     assert.equal((await runCf(["run", "@zeus", "third", "--no-handoff"], ctx)).exitCode, 0);
-    assert.doesNotMatch((await latestPacket(ws)).packet, /## Handoff — current session/);
+    assert.doesNotMatch((await latestPacket(ws, dir)).packet, /## Handoff — current session/);
   });
 });
 

@@ -21,7 +21,7 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" doctor        # which engine CLIs are in
 - Participants can take **minutes** (frontier models at high effort). Set a generous Bash timeout (600000 ms), or run in the background and poll.
 - `--context` adds a focused brief from you on top of the auto-included session handoff.
 - The handoff (a serialized snapshot of this session) is attached automatically from the transcript stash the plugin hooks maintain; `--no-handoff` skips it.
-- The run prints the participant's answer plus run metadata; artifacts land under `.consensflow-cc/runs/<run-id>/` (`packet.md`, `stdout.txt`, `stderr.txt`, `result.json`).
+- The run prints the participant's answer plus run metadata; artifacts land in the workspace's run dir under `~/.consensflow/consensflow-cc/workspaces/…` (`packet.md`, `stdout.txt`, `stderr.txt`, `result.json`) — never inside the project.
 
 ## The two rules that matter most
 
@@ -82,7 +82,7 @@ Presets (all read-only reviewers; the same model+effort family exists on every e
 - **Deep open-weights**: `@luna` (OpenCode Kimi K2.6).
 - **Fast/cheap tier** (quick gut-checks): `@hermod` (Claude Haiku 4.5), `@nike`/`@sif` (Gemini 3.5 Flash on Pi/OpenCode), `@zephyros`/`@freya` (DeepSeek V4 Flash on Pi/OpenCode).
 - **Model zoo** (same OpenRouter models on two engines; Greek = pi, Norse = opencode): DeepSeek V4 Pro `@hades`/`@odin`, Gemini 3.1 Pro `@helios`/`@heimdall`, Grok 4.3 `@ares`/`@thor`, Qwen3.7 Max `@hephaestus`/`@tyr`, Llama 4 Maverick `@pan`/`@vidar`, Mistral Large `@aeolus`/`@njord`, MiniMax M3 `@metis`/`@mimir`.
-- **Image**: `@pygmalion` (kind=image) generates a picture with gpt-image-2 via the Codex CLI login (`codex login`) — prompt-only (no handoff), PNG saved under `.consensflow-cc/runs/<id>/image.png`; open it with the Read tool to view or show it.
+- **Image**: `@pygmalion` (kind=image) generates a picture with gpt-image-2 via the Codex CLI login (`codex login`) — prompt-only (no handoff), PNG saved as `image.png` in the run dir; open it with the Read tool to view or show it.
 
 Model and effort strings pass through to the engine verbatim, so any identifier the engine accepts works.
 
