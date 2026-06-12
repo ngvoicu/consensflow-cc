@@ -34,7 +34,7 @@ The plugin's UserPromptSubmit hook sees exactly one configured @mention
    │   stashes the prompt body and injects the exact run command as context
    ▼
 Claude (the lead) executes via the Bash tool:
-   node ".../bin/cf.mjs" run @zeus --prompt-file ".consensflow/pending-prompt.md"
+   node ".../bin/cf.mjs" run @zeus --prompt-file ".consensflow-cc/pending-prompt.md"
    ▼
 cf.mjs builds a "packet" for @zeus:
    • who @zeus is        (claude-code · claude-opus-4-8 · max · reviewer)
@@ -45,7 +45,7 @@ cf.mjs builds a "packet" for @zeus:
    ▼
 Runs @zeus as an isolated, one-shot subprocess (read-only tools, no session persistence)
    ▼
-Saves artifacts:  <workspace>/.consensflow/runs/<run-id>/{packet.md, stdout.txt, stderr.txt, result.json}
+Saves artifacts:  <workspace>/.consensflow-cc/runs/<run-id>/{packet.md, stdout.txt, stderr.txt, result.json}
    ▼
 Claude relays @zeus's answer — and never acts on it without your approval
 ```
@@ -121,7 +121,7 @@ Say **"latest changes"** (or diff / patch / changed files) and your `git status`
 The answer is relayed inline. Every run is saved under the workspace:
 
 ```text
-<workspace>/.consensflow/runs/<run-id>/
+<workspace>/.consensflow-cc/runs/<run-id>/
   packet.md      # exactly what the participant was sent
   stdout.txt     # raw engine output
   stderr.txt     # raw engine errors/progress
@@ -139,7 +139,7 @@ A write-capable run also saves `post-run-changes.diff` — what changed on disk,
 ```
 
 - Takes your **prompt only** — no session handoff (an image model can't use the transcript).
-- The PNG is saved to `.consensflow/runs/<id>/image.png`; Claude can open it with the Read tool.
+- The PNG is saved to `.consensflow-cc/runs/<id>/image.png`; Claude can open it with the Read tool.
 - `cf doctor` checks the Codex login when image participants are configured; an expired token says so and points at `codex login`.
 - Roll your own: `cf participants add --name <name> --kind image` (the model field is only the trigger; the backend is always gpt-image-2).
 
@@ -168,7 +168,7 @@ cf run @name <prompt> [--prompt-file f] [--context note] [--no-handoff]
 |---|---|---|
 | Host | Pi extension (`pi install …`) | Claude Code plugin (`--plugin-dir` / marketplace) |
 | @mention routing | input interception in the extension | `UserPromptSubmit` hook injects the run command |
-| Handoff source | `ctx.sessionManager.getBranch()` | session transcript JSONL, stashed by hooks into `.consensflow/session.json` |
+| Handoff source | `ctx.sessionManager.getBranch()` | session transcript JSONL, stashed by hooks into `.consensflow-cc/session.json` |
 | Per-participant `/name` commands | yes (registered at load) | no — use `@name` or `/consensflow:cf` |
 | Image participants (`@pygmalion`) | yes (Pi's openai-codex login) | yes (the Codex CLI's login, `~/.codex/auth.json`) |
 | Participant roster | `~/.consensflow/consensflow-pi/` | `~/.consensflow/consensflow-cc/` (same format — copy entries to share) |

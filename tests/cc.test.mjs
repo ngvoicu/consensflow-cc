@@ -72,7 +72,7 @@ test("serializeClaudeTranscript labels tool results via the tool_use map and ski
 test("serializeClaudeTranscript keeps ConsensFlow run results near-whole (cross-pollination)", () => {
   const reply = "A".repeat(5000);
   const entries = [
-    assistantEntry([{ type: "tool_use", id: "t1", name: "Bash", input: { command: 'node "/plug/bin/cf.mjs" run @iris --prompt-file "/ws/.consensflow/pending-prompt.md"' } }]),
+    assistantEntry([{ type: "tool_use", id: "t1", name: "Bash", input: { command: 'node "/plug/bin/cf.mjs" run @iris --prompt-file "/ws/.consensflow-cc/pending-prompt.md"' } }]),
     userEntry([{ type: "tool_result", tool_use_id: "t1", content: reply }]),
     assistantEntry([{ type: "tool_use", id: "t2", name: "Read", input: { file_path: "a.ts" } }]),
     userEntry([{ type: "tool_result", tool_use_id: "t2", content: reply }]),
@@ -178,7 +178,7 @@ test("user-prompt hook routes a configured @mention to a run instruction with a 
     assert.match(context, /addresses the participant @zeus/);
     assert.match(context, /run @zeus --prompt-file/);
     assert.match(context, /without the user's approval/);
-    assert.equal(await readFile(path.join(dir, ".consensflow", "pending-prompt.md"), "utf8"), "what about the cache?");
+    assert.equal(await readFile(path.join(dir, ".consensflow-cc", "pending-prompt.md"), "utf8"), "what about the cache?");
   });
 });
 
@@ -291,7 +291,7 @@ async function runCf(args, { ws, dir, fake }, extraEnv = {}) {
 }
 
 async function latestPacket(ws) {
-  const current = JSON.parse(await readFile(path.join(ws, ".consensflow", "current.json"), "utf8"));
+  const current = JSON.parse(await readFile(path.join(ws, ".consensflow-cc", "current.json"), "utf8"));
   return {
     current,
     packet: await readFile(path.join(current.latestRunDir, "packet.md"), "utf8"),

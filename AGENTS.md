@@ -10,7 +10,7 @@ Claude Code-native ConsensFlow package: a Claude Code **plugin** (skill + slash 
 - Each call's packet embeds a serialized, capped handoff of the current session plus the prompt; participants stay isolated one-shot subprocesses — no live/shared transcript, no ACP.
 - Participant config is global/user-level under `~/.consensflow/consensflow-cc/participants.json` — a per-tool roster (pi keeps its own under `~/.consensflow/consensflow-pi/`); same file format, copy entries to share.
 - Participants come from curated presets (`lib/presets.js`, renameable via `--name`) or fully custom definitions (`cf participants add --name … --kind … --model … --roles … --tools …`).
-- Project-local `.consensflow/` stores run artifacts plus the hook-maintained `session.json` stash.
+- Project-local `.consensflow-cc/` stores run artifacts plus the hook-maintained `session.json` stash.
 - No hidden workflows: no spec-review command, no council/fan-out, no grill.
 
 ## Source layout
@@ -52,6 +52,6 @@ claude --plugin-dir .                      # load for a manual session (real eng
 - Participants respond to the user's prompt as written; no injected ceremony terms.
 - Participants run with their configured tools; `effectiveToolsPolicy` forces read-only for purely-advisory roles. Per-engine enforcement: codex `--sandbox read-only` (OS-level), claude `--allowedTools` + `--disallowedTools` deny list, pi `--tools` allowlist, opencode `OPENCODE_PERMISSION={"edit":"deny","bash":"deny"}`. Claude/codex children get `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` stripped (subscription-login billing guard).
 - Recursion guards: every child carries `CONSENSFLOW_CHILD=1`; hooks and `cf run` bail under it; claude children run `--bare`; pi children run `--no-extensions`.
-- Image participants (`kind: image`) bypass the CLI runner: handled in `cf.mjs` (`runImageParticipant`) with the prompt only (no packet/handoff), auth from `codex-auth.js`, PNG + result.json under `.consensflow/runs/<id>/`. `buildRunnerInvocation` throws on `image` as a loud backstop so it can never silently reach the CLI path. `cf doctor` reports the codex login when image participants exist.
+- Image participants (`kind: image`) bypass the CLI runner: handled in `cf.mjs` (`runImageParticipant`) with the prompt only (no packet/handoff), auth from `codex-auth.js`, PNG + result.json under `.consensflow-cc/runs/<id>/`. `buildRunnerInvocation` throws on `image` as a loud backstop so it can never silently reach the CLI path. `cf doctor` reports the codex login when image participants exist.
 - Consent gate: consulting is free and proactive; acting on a participant's response — or keeping a write-capable participant's edits — requires explicit user approval unless pre-authorized. Synced across `skills/consensflow/SKILL.md`, `commands/cf.md`, both hook context strings, and the CLI's run-output reminder; don't weaken one without the others (tests lock the phrases).
 - Keep command paths real end-to-end; no reachable stubs. Tests must never spawn live agent CLIs (PATH shims + temp `CONSENSFLOW_HOME` only).
