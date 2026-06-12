@@ -78,7 +78,7 @@ claude --plugin-dir /path/to/consensflow-cc
 claude plugin validate /path/to/consensflow-cc
 ```
 
-**Verify** inside a session: `/consensflow:cf doctor` shows which engine CLIs are installed; `/consensflow:cf status` shows your participants.
+**Verify** inside a session: `/consensflow:doctor` shows which engine CLIs are installed; `/consensflow:status` shows your participants.
 
 ## How to use
 
@@ -87,17 +87,17 @@ claude plugin validate /path/to/consensflow-cc
 Same presets as consensflow-pi (47 curated presets — every model+effort family on every engine that runs it, including the `@pygmalion` image preset; `/consensflow:presets` prints the full list):
 
 ```text
-/consensflow:cf participants presets         # see all presets
-/consensflow:cf participants add zeus        # add one        → @zeus
-/consensflow:cf participants add all         # add everything
-/consensflow:cf participants add zeus --name Deepreview   # renamed copy
+/consensflow:presets                         # see all presets
+/consensflow:participants add zeus           # add one        → @zeus
+/consensflow:participants add all            # add everything
+/consensflow:participants add zeus --name Deepreview   # renamed copy
 ```
 
 Or fully custom (any model string the engine accepts — values pass through verbatim):
 
 ```text
-/consensflow:cf participants add --name Sonnet --kind claude-code --model claude-sonnet-4-6 --effort high
-/consensflow:cf participants add --name Builder --kind opencode --model openrouter/moonshotai/kimi-k2.6 --roles implementer --tools workspace-write
+/consensflow:participants add --name Sonnet --kind claude-code --model claude-sonnet-4-6 --effort high
+/consensflow:participants add --name Builder --kind opencode --model openrouter/moonshotai/kimi-k2.6 --roles implementer --tools workspace-write
 ```
 
 > **Read-only vs write.** By default a participant is a **reviewer** and can only read. Advisory roles (`reviewer` / `council` / `knowledge`) are *always* forced read-only, even if you pass a write flag. For a write-capable participant use `--roles implementer --tools workspace-write` (or `full-auto`).
@@ -111,7 +111,7 @@ Config lives in `~/.consensflow/consensflow-cc/participants.json` — per tool, 
 /consensflow:cf @zeus What's the riskiest part?       # explicit slash command
 ```
 
-Admin shortcuts: `/consensflow:status`, `/consensflow:doctor`, `/consensflow:presets`, and `/consensflow:participants` (lists what you've added) — each just runs the matching CLI subcommand.
+Admin shortcuts: `/consensflow:status`, `/consensflow:doctor`, `/consensflow:presets`, and `/consensflow:participants` (no arguments lists what you've added; it also takes `add` / `show` / `remove` arguments, e.g. `/consensflow:participants add athena`) — each just runs the matching CLI subcommand.
 
 Claude itself can also consult participants on its own initiative (the bundled skill encourages it before finalizing non-trivial designs/diffs) — consulting is free, **acting on the answer always needs your approval** unless you pre-authorized it.
 

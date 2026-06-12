@@ -1,12 +1,13 @@
 ---
-description: "ConsensFlow: list the participants you have added"
+description: "ConsensFlow: list or manage your participants (add, show, remove, presets)"
+argument-hint: "[add <preset>|all | add --name <n> --kind <k> --model <m> … | show @name | remove @name | presets]"
 disable-model-invocation: true
 ---
 
 Run the ConsensFlow CLI via the Bash tool and relay its output as-is:
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants list
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants $ARGUMENTS
 ```
 
-If none are configured yet, relay the CLI's creation instructions as-is and add that the user can simply ask in plain words — e.g. "add the zeus preset" or "add all presets" — and you will run the matching `participants add` command for them.
+With no arguments this lists the configured participants. Keep flags and single words as-is; shell-quote any argument containing spaces (e.g. a `--description` value).

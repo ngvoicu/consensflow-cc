@@ -17,7 +17,7 @@ Claude Code-native ConsensFlow package: a Claude Code **plugin** (skill + slash 
 
 - `bin/cf.mjs` — the CLI the lead drives via the Bash tool: `status` / `doctor` / `participants …` / `run @name …`. Owns run orchestration (handoff, diff heuristic, write-capture, consent reminder) and the image-participant path (`runImageParticipant`: prompt-only, Codex backend, PNG artifact) — the CC analog of pi's `index.ts` glue.
 - `lib/*.js` — plain JS, the unit-tested core:
-  - `presets.js` — preset catalog + `participantFromPreset` (pi's catalog 1:1, pygmalion included). Delta vs pi: `formatPresets(cli)` takes the real CLI invocation so printed guidance shows runnable commands, not a bare `cf` shorthand.
+  - `presets.js` — preset catalog + `participantFromPreset` (pi's catalog 1:1, pygmalion included). Delta vs pi: printed guidance promotes the host slash commands (`/consensflow:participants …`), not pi's `/cf …`.
   - `state.js` — global participant store (per-tool config root) + `normalizeParticipant` + the per-workspace `session.json` stash (`loadSession`/`saveSession`).
   - `packets.js` — `createPacket` (conversational, mode-aware, handoff + prompt).
   - `transcript.js` — Claude Code transcript JSONL → handoff text (defensive parse, sidechain/meta/noise skip, thinking redaction, ConsensFlow-run tool results kept near-whole for cross-pollination, byte-capped keep-tail). Replaces pi's `handoff.js`.
@@ -29,7 +29,7 @@ Claude Code-native ConsensFlow package: a Claude Code **plugin** (skill + slash 
 - `scripts/` — hook entrypoints: `session-start-hook.mjs` (stash transcript path + roster context), `user-prompt-hook.mjs` (stash + route a single configured `@mention` into an injected run instruction), `hook-io.mjs` (stdin reader). Both bail under `CONSENSFLOW_CHILD` and always exit 0.
 - `hooks/hooks.json` — wires both hooks via `${CLAUDE_PLUGIN_ROOT}`.
 - `skills/consensflow/SKILL.md` — when/how the lead consults; home of the consent gate.
-- `commands/` — `/consensflow:cf` (the generic router) plus user-only admin shortcuts `/consensflow:status|doctor|presets|participants`; all delegate to the CLI.
+- `commands/` — `/consensflow:cf` (the generic router) plus user-only admin shortcuts `/consensflow:status|doctor|presets` and `/consensflow:participants […]` (forwards its arguments to `participants …`, so `add`/`show`/`remove` work from the slash command); all delegate to the CLI. User-facing guidance printed by the CLI promotes these slash commands.
 - `.claude-plugin/plugin.json` — manifest (name `consensflow`).
 - `tests/core.test.mjs` (ported lib suite + preset×runner matrix), `tests/cc.test.mjs` (transcript, hooks, fake-engine e2e for all four engines, packaging locks).
 

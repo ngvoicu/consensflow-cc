@@ -3,7 +3,6 @@
 // Mirrors consensflow-pi's /cf router: participants admin, doctor, status, and one-at-a-time runs.
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { codexAuthPath, loadCodexAuth } from "../lib/codex-auth.js";
 import { generateImage, IMAGE_BACKEND, IMAGE_TRIGGER_DEFAULT, saveImagePng } from "../lib/image.js";
 import { formatPresets, getPreset, listPresetIds, participantFromPreset } from "../lib/presets.js";
@@ -28,10 +27,6 @@ import { effectiveToolsPolicy, participantForKind } from "../lib/workflows.js";
 
 const CONSULT_REMINDER =
   "_Reminder: summarize this for the user with your recommendation, and get their approval before applying it (unless they already authorized you to proceed)._";
-
-// The real, runnable invocation of this CLI — printed guidance must show this, not a bare `cf`
-// shorthand that is on no one's PATH (the output is often relayed verbatim to the user).
-const CLI_CMD = `node "${fileURLToPath(import.meta.url)}"`;
 
 async function main() {
   const cwd = process.cwd();
@@ -121,12 +116,12 @@ async function handleParticipants(tokens, cwd) {
     return;
   }
   if (sub === "presets" || sub === "preset") {
-    console.log(formatPresets(CLI_CMD));
+    console.log(formatPresets());
     return;
   }
   if (sub === "show") {
     const ref = tokens[0];
-    if (!ref) throw new Error("Usage: cf participants show @name");
+    if (!ref) throw new Error("Usage: /consensflow:participants show @name");
     const participant = await getParticipant(cwd, ref);
     if (!participant) throw new Error(`Unknown participant: ${ref}`);
     console.log(`# ${participant.name}\n\n\`\`\`json\n${JSON.stringify(participant, null, 2)}\n\`\`\``);
@@ -134,7 +129,7 @@ async function handleParticipants(tokens, cwd) {
   }
   if (sub === "remove" || sub === "rm") {
     const ref = tokens[0];
-    if (!ref) throw new Error("Usage: cf participants remove @name");
+    if (!ref) throw new Error("Usage: /consensflow:participants remove @name");
     const removed = await removeParticipant(cwd, ref);
     console.log(removed ? `Removed ${ref}.` : `No participant matched ${ref}.`);
     return;
@@ -169,7 +164,7 @@ async function handleParticipants(tokens, cwd) {
     if (stringFlag(parsed.flags.name) !== undefined || hasCustomShape(parsed.flags)) {
       assertAllowedFlags(parsed.flags, CUSTOM_ADD_FLAGS, "custom add");
       const name = stringFlag(parsed.flags.name) ?? presetRef;
-      if (!name) throw new Error("Custom participant needs a name: cf participants add --name <name> --kind <kind> --model <model> ...");
+      if (!name) throw new Error("Custom participant needs a name: /consensflow:participants add --name <name> --kind <kind> --model <model> ...");
       const participant = await upsertParticipant(cwd, customParticipantInput(name, parsed.flags));
       console.log(`Saved custom participant @${participant.id} in ${configRoot()}.\n\n${formatParticipantLine(participant)}`);
       return;
@@ -177,12 +172,12 @@ async function handleParticipants(tokens, cwd) {
 
     if (presetRef) {
       throw new Error(
-        `Unknown preset: ${presetRef}\n\nPresets: ${listPresetIds().join(", ")} (rename any with --name).\n\nOr create a custom participant:\n  cf participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--roles <r>] [--tools <readonly|workspace-write|full-auto>]`,
+        `Unknown preset: ${presetRef}\n\nPresets: ${listPresetIds().join(", ")} (rename any with --name).\n\nOr create a custom participant:\n  /consensflow:participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--roles <r>] [--tools <readonly|workspace-write|full-auto>]`,
       );
     }
     throw new Error(addUsage());
   }
-  throw new Error("Usage: cf participants list|presets|add|show|remove");
+  throw new Error("Usage: /consensflow:participants list|presets|add|show|remove");
 }
 
 async function handleRun(tokens, cwd) {
@@ -196,7 +191,7 @@ async function handleRun(tokens, cwd) {
   const positional = [...parsed.positional];
   const ref = positional.shift();
   if (!ref || !ref.startsWith("@")) {
-    throw new Error("Usage: cf run @name <prompt> [--prompt-file <file>] [--context <note>] [--no-handoff] [--timeout-ms <ms>] [--json]");
+    throw new Error("Usage: /consensflow:cf @name <prompt> — or via the Bash tool: run @name <prompt> [--prompt-file <file>] [--context <note>] [--no-handoff] [--timeout-ms <ms>] [--json]");
   }
   if (positional[0]?.startsWith("@")) {
     throw new Error("ConsensFlow sends to one participant at a time. Ask one, read its answer, then ask another.");
@@ -204,7 +199,7 @@ async function handleRun(tokens, cwd) {
 
   const participant = await getParticipant(cwd, ref);
   if (!participant) {
-    const known = (await loadParticipants(cwd)).map((p) => `@${p.id}`).join(", ") || `none configured — run \`${CLI_CMD} participants add <preset>\` first (the \`participants presets\` subcommand lists the presets)`;
+    const known = (await loadParticipants(cwd)).map((p) => `@${p.id}`).join(", ") || "none configured — add one with `/consensflow:participants add <preset>` (see `/consensflow:presets`)";
     throw new Error(`Unknown participant: @${slugify(String(ref).replace(/^@+/, ""))}. Configured: ${known}`);
   }
 
@@ -343,9 +338,9 @@ function customParticipantInput(name, flags) {
 function addUsage() {
   return [
     "Usage:",
-    "  cf participants add <preset> [--name <name>]        # from a preset, optionally renamed",
-    "  cf participants add all                              # every preset",
-    "  cf participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--thinking <t>] [--roles <r>] [--tools <readonly|workspace-write|full-auto>] [--cwd <subdir>]",
+    "  /consensflow:participants add <preset> [--name <name>]   # from a preset, optionally renamed",
+    "  /consensflow:participants add all                         # every preset",
+    "  /consensflow:participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--thinking <t>] [--roles <r>] [--tools <readonly|workspace-write|full-auto>] [--cwd <subdir>]",
     "",
     `Presets: ${listPresetIds().join(", ")}`,
   ].join("\n");
@@ -360,16 +355,14 @@ function formatParticipants(participants) {
       "",
       "No participants configured yet.",
       "",
-      "Create participants (via the Bash tool):",
+      "Create participants:",
       "```text",
-      `${CLI_CMD} participants presets   # list the presets`,
-      `${CLI_CMD} participants add zeus   # from a preset`,
-      `${CLI_CMD} participants add zeus --name Deepreview   # preset backend, custom name`,
-      `${CLI_CMD} participants add all   # every preset`,
-      `${CLI_CMD} participants add --name Builder --kind codex --model gpt-5.5 --roles implementer --tools workspace-write`,
+      "/consensflow:presets                                    # list the curated presets",
+      "/consensflow:participants add zeus                      # add a preset",
+      "/consensflow:participants add zeus --name Deepreview    # preset backend, custom name",
+      "/consensflow:participants add all                       # every preset",
+      "/consensflow:participants add --name Builder --kind codex --model gpt-5.5 --roles implementer --tools workspace-write",
       "```",
-      "",
-      'Or ask in plain words — "add the zeus preset", "add all presets" — and the lead runs it for you (no slash commands or CLI needed).',
     ].join("\n");
   }
   return ["# ConsensFlow participants", "", `Config root: ${configRoot()}`, "", ...participants.map(formatParticipantLine)].join("\n");
@@ -399,44 +392,39 @@ function renderRunResult(result) {
 }
 
 function helpText() {
-  return `# ConsensFlow CC help
+  return `# ConsensFlow help
 
-Natural-language prompts to one participant at a time. Each participant gets the current
-session as a handoff plus your prompt, and answers conversationally.
-
-\`cf\` below stands for the actual invocation (run it via the Bash tool):
-
-\`\`\`text
-${CLI_CMD}
-\`\`\`
+Ask one named participant at a time. Each participant gets the current session as a handoff
+plus your prompt, and answers conversationally.
 
 Ask a participant:
 
 \`\`\`text
-cf run @zeus What do you think about this approach?
-cf run @zeus --prompt-file question.md            # verbatim prompt from a file
-cf @zeus What do you think?                        # shorthand
+@zeus What do you think about this approach?       # mention it in your prompt — the plugin routes it
+/consensflow:cf @zeus What do you think?           # explicit slash command
 \`\`\`
 
-Add participants (config is global per tool, ${configRoot()}/participants.json — same format as
-consensflow-pi's roster, copy entries to share):
+Manage participants (config is global per tool, ${configRoot()}/participants.json — same format
+as consensflow-pi's roster, copy entries to share):
 
 \`\`\`text
-cf participants add zeus                           # from a preset
-cf participants add zeus --name Deepreview         # preset backend, your own name
-cf participants add all                            # every preset
-cf participants add --name Builder --kind codex --model gpt-5.5 --effort high \\
-    --roles implementer --tools workspace-write    # fully custom
+/consensflow:presets                                    # list the curated presets
+/consensflow:participants                               # list configured participants
+/consensflow:participants add zeus                      # add a preset
+/consensflow:participants add zeus --name Deepreview    # preset backend, your own name
+/consensflow:participants add all                       # every preset
+/consensflow:participants add --name Builder --kind codex --model gpt-5.5 --effort high \\
+    --roles implementer --tools workspace-write         # fully custom
+/consensflow:participants show @zeus
+/consensflow:participants remove @zeus
+/consensflow:status                                     # roster + latest run
+/consensflow:doctor                                     # engine CLI health check
 \`\`\`
 
-Admin commands:
-
-- \`cf status\`
-- \`cf doctor\`
-- \`cf participants list|presets|add|show|remove\`
-
-Run flags: \`--prompt <text>\` | \`--prompt-file <file>\` | \`--context <note>\` | \`--no-handoff\` |
-\`--timeout-ms <ms>\` | \`--json\`
+For the lead (via the Bash tool), the CLI subcommands are \`status\` | \`doctor\` |
+\`participants list|presets|add|show|remove\` | \`run @name <prompt>\`, with run flags
+\`--prompt <text>\` | \`--prompt-file <file>\` | \`--context <note>\` | \`--no-handoff\` |
+\`--timeout-ms <ms>\` | \`--json\`.
 
 Rules:
 
