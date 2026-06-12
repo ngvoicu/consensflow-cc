@@ -17,7 +17,7 @@ Claude Code-native ConsensFlow package: a Claude Code **plugin** (skill + slash 
 
 - `bin/cf.mjs` — the CLI the lead drives via the Bash tool: `status` / `doctor` / `participants …` / `run @name …`. Owns run orchestration (handoff, diff heuristic, write-capture, consent reminder) and the image-participant path (`runImageParticipant`: prompt-only, Codex backend, PNG artifact) — the CC analog of pi's `index.ts` glue.
 - `lib/*.js` — plain JS, the unit-tested core:
-  - `presets.js` — preset catalog + `participantFromPreset` (pi's catalog 1:1, pygmalion included).
+  - `presets.js` — preset catalog + `participantFromPreset` (pi's catalog 1:1, pygmalion included). Delta vs pi: `formatPresets(cli)` takes the real CLI invocation so printed guidance shows runnable commands, not a bare `cf` shorthand.
   - `state.js` — global participant store (per-tool config root) + `normalizeParticipant` + the per-workspace `session.json` stash (`loadSession`/`saveSession`).
   - `packets.js` — `createPacket` (conversational, mode-aware, handoff + prompt).
   - `transcript.js` — Claude Code transcript JSONL → handoff text (defensive parse, sidechain/meta/noise skip, thinking redaction, ConsensFlow-run tool results kept near-whole for cross-pollination, byte-capped keep-tail). Replaces pi's `handoff.js`.

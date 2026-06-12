@@ -3,6 +3,7 @@
 // Mirrors consensflow-pi's /cf router: participants admin, doctor, status, and one-at-a-time runs.
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { codexAuthPath, loadCodexAuth } from "../lib/codex-auth.js";
 import { generateImage, IMAGE_BACKEND, IMAGE_TRIGGER_DEFAULT, saveImagePng } from "../lib/image.js";
 import { formatPresets, getPreset, listPresetIds, participantFromPreset } from "../lib/presets.js";
@@ -27,6 +28,10 @@ import { effectiveToolsPolicy, participantForKind } from "../lib/workflows.js";
 
 const CONSULT_REMINDER =
   "_Reminder: summarize this for the user with your recommendation, and get their approval before applying it (unless they already authorized you to proceed)._";
+
+// The real, runnable invocation of this CLI — printed guidance must show this, not a bare `cf`
+// shorthand that is on no one's PATH (the output is often relayed verbatim to the user).
+const CLI_CMD = `node "${fileURLToPath(import.meta.url)}"`;
 
 async function main() {
   const cwd = process.cwd();
@@ -116,7 +121,7 @@ async function handleParticipants(tokens, cwd) {
     return;
   }
   if (sub === "presets" || sub === "preset") {
-    console.log(formatPresets());
+    console.log(formatPresets(CLI_CMD));
     return;
   }
   if (sub === "show") {
@@ -199,7 +204,7 @@ async function handleRun(tokens, cwd) {
 
   const participant = await getParticipant(cwd, ref);
   if (!participant) {
-    const known = (await loadParticipants(cwd)).map((p) => `@${p.id}`).join(", ") || "none configured — run `cf participants add <preset>` first (see `cf participants presets`)";
+    const known = (await loadParticipants(cwd)).map((p) => `@${p.id}`).join(", ") || `none configured — run \`${CLI_CMD} participants add <preset>\` first (the \`participants presets\` subcommand lists the presets)`;
     throw new Error(`Unknown participant: @${slugify(String(ref).replace(/^@+/, ""))}. Configured: ${known}`);
   }
 
@@ -355,14 +360,16 @@ function formatParticipants(participants) {
       "",
       "No participants configured yet.",
       "",
-      "Create participants:",
+      "Create participants (via the Bash tool):",
       "```text",
-      "cf participants presets",
-      "cf participants add zeus                     # from a preset",
-      "cf participants add zeus --name Deepreview   # preset backend, custom name",
-      "cf participants add all                      # every preset",
-      "cf participants add --name Builder --kind codex --model gpt-5.5 --roles implementer --tools workspace-write",
+      `${CLI_CMD} participants presets   # list the presets`,
+      `${CLI_CMD} participants add zeus   # from a preset`,
+      `${CLI_CMD} participants add zeus --name Deepreview   # preset backend, custom name`,
+      `${CLI_CMD} participants add all   # every preset`,
+      `${CLI_CMD} participants add --name Builder --kind codex --model gpt-5.5 --roles implementer --tools workspace-write`,
       "```",
+      "",
+      'Or ask in plain words — "add the zeus preset", "add all presets" — and the lead runs it for you (no slash commands or CLI needed).',
     ].join("\n");
   }
   return ["# ConsensFlow participants", "", `Config root: ${configRoot()}`, "", ...participants.map(formatParticipantLine)].join("\n");
@@ -396,6 +403,12 @@ function helpText() {
 
 Natural-language prompts to one participant at a time. Each participant gets the current
 session as a handoff plus your prompt, and answers conversationally.
+
+\`cf\` below stands for the actual invocation (run it via the Bash tool):
+
+\`\`\`text
+${CLI_CMD}
+\`\`\`
 
 Ask a participant:
 
