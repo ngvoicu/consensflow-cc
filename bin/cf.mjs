@@ -3,7 +3,6 @@
 // Mirrors consensflow-pi's /cf router: participants admin, doctor, status, and one-at-a-time runs.
 import fs from "node:fs/promises";
 import path from "node:path";
-import { collectGitDiff, gitChangesDiffer } from "../lib/artifacts.js";
 import { codexAuthPath, loadCodexAuth } from "../lib/codex-auth.js";
 import { generateImage, IMAGE_BACKEND, IMAGE_TRIGGER_DEFAULT, saveImagePng } from "../lib/image.js";
 import { formatPresets, getPreset, listPresetIds, participantFromPreset } from "../lib/presets.js";
@@ -192,7 +191,7 @@ async function handleRun(tokens, cwd) {
   const positional = [...parsed.positional];
   const ref = positional.shift();
   if (!ref || !ref.startsWith("@")) {
-    throw new Error("Usage: cf run @name <prompt> [--prompt-file <file>] [--context <note>] [--no-handoff] [--include-changes|--no-include-changes] [--timeout-ms <ms>] [--json]");
+    throw new Error("Usage: cf run @name <prompt> [--prompt-file <file>] [--context <note>] [--no-handoff] [--timeout-ms <ms>] [--json]");
   }
   if (positional[0]?.startsWith("@")) {
     throw new Error("ConsensFlow sends to one participant at a time. Ask one, read its answer, then ask another.");
@@ -213,8 +212,6 @@ async function handleRun(tokens, cwd) {
   // Image participants bypass the CLI runner: prompt-only (no packet/handoff), Codex backend.
   if (participant.kind === "image") return await runImageParticipant(cwd, participant, prompt, parsed.flags);
 
-  const includeDiff = flagBool(parsed.flags, "include-changes") ?? shouldIncludeLatestChanges(prompt);
-  const diff = includeDiff ? await safeCollectGitDiff(cwd) : undefined;
   let handoff = "";
   if (flagBool(parsed.flags, "handoff") ?? true) {
     handoff = stringFlag(parsed.flags["handoff-file"]) !== undefined
@@ -223,11 +220,8 @@ async function handleRun(tokens, cwd) {
   }
 
   const effective = participantForKind(participant, "ask");
-  const writeCapable = effectiveToolsPolicy(participant) !== "readonly";
-  const before = writeCapable ? (diff ?? (await safeCollectGitDiff(cwd))) : undefined;
-  const packet = await createPacket({ cwd, participant: effective, kind: "ask", task: prompt, diff, extraContext: stringFlag(parsed.flags.context), handoff });
+  const packet = await createPacket({ cwd, participant: effective, kind: "ask", task: prompt, extraContext: stringFlag(parsed.flags.context), handoff });
   const result = await runParticipant({ cwd, participant: effective, packet, kind: "ask", timeoutMs: parsed.flags["timeout-ms"] });
-  if (writeCapable) result.changes = await captureWriteChanges(cwd, before, result.runDir);
 
   if (parsed.flags.json === true) {
     console.log(JSON.stringify(result, null, 2));
@@ -281,57 +275,11 @@ async function runImageParticipant(cwd, participant, prompt, flags) {
   );
 }
 
-function shouldIncludeLatestChanges(prompt) {
-  return /\b(latest changes?|recent changes?|diff|git diff|patch|review changes?|changed files?|implementation)\b/i.test(prompt);
-}
-
 // Tri-state flag pair: --<name> → true, --no-<name> → false, neither → undefined.
 function flagBool(flags, name) {
   if (flags[`no-${name}`] === true) return false;
   if (flags[name] === true) return true;
   return undefined;
-}
-
-function gitExec(cwd) {
-  return (command, args, options = {}) =>
-    spawnWithInput(command, args, { cwd: options.cwd ?? cwd, timeoutMs: options.timeout ?? 10_000 }).then((r) => ({ code: r.exitCode, stdout: r.stdout, stderr: r.stderr }));
-}
-
-// Snapshot the working tree without ever throwing: a missing git binary must not block a run.
-// A missing before-snapshot makes captureWriteChanges over-report (changed=true), which is the
-// safe direction for a consent gate.
-async function safeCollectGitDiff(cwd) {
-  try {
-    return await collectGitDiff(cwd, gitExec(cwd));
-  } catch {
-    return undefined;
-  }
-}
-
-// After a write-capable run, snapshot the workspace so the lead can summarize what changed before
-// keeping it (the consent gate). git-tracked tree only. Capture failure must never discard the
-// participant's output, so it degrades to a sentinel.
-async function captureWriteChanges(cwd, before, runDir) {
-  let after;
-  try {
-    after = await collectGitDiff(cwd, gitExec(cwd));
-  } catch {
-    return { changed: true, captureError: true };
-  }
-  if (!after) return undefined;
-  const changed = gitChangesDiffer(before, after);
-  const savablePatch = after.patch && String(after.patch).trim() ? after.patch : after.cached && String(after.cached).trim() ? after.cached : "";
-  let savedPath;
-  if (changed && savablePatch) {
-    try {
-      const target = path.join(runDir, "post-run-changes.diff");
-      await fs.writeFile(target, savablePatch, "utf8");
-      savedPath = target;
-    } catch {
-      savedPath = undefined;
-    }
-  }
-  return { changed, status: after.status, stat: after.stat, savedPath };
 }
 
 const PRESET_OVERRIDE_FLAGS = ["name", "id", "cwd", "timeoutMs", "description"];
@@ -430,23 +378,9 @@ function formatParticipantLine(p) {
 function renderRunResult(result) {
   const writeCapable = effectiveToolsPolicy(result.participant) !== "readonly";
   const lines = [`# @${result.participant.id}`, "", `Run: ${result.runId}`, `Exit: ${result.exitCode}${result.timedOut ? " (timed out)" : ""}`, `Artifacts: ${result.runDir}`];
-  if (writeCapable) lines.push("", "> Write-capable run: this participant could edit files and run commands. Review its changes before keeping or building on them.");
+  if (writeCapable) lines.push("", "> Write-capable run: this participant could edit files and run commands. Inspect what changed in the workspace (e.g. `git status` / `git diff` in a repo) and review it before keeping or building on it.");
   lines.push("", result.output);
-  if (result.changes) lines.push("", renderChanges(result.changes));
   return lines.join("\n");
-}
-
-function renderChanges(changes) {
-  if (changes.captureError) {
-    return "_Could not capture workspace changes after this run (git unavailable or aborted). Inspect the workspace and the run artifacts manually before keeping anything._";
-  }
-  if (!changes.changed) return "_No git-tracked changes detected from this run._";
-  const parts = ["## Changes on disk after this run (review before keeping)"];
-  if (changes.status && String(changes.status).trim()) parts.push("", "### git status --short", "```", String(changes.status).trim(), "```");
-  if (changes.stat && String(changes.stat).trim()) parts.push("", "### git diff --stat", "```", String(changes.stat).trim(), "```");
-  if (changes.savedPath) parts.push("", `Full diff saved to \`${changes.savedPath}\`.`);
-  parts.push("", "_git-tracked tree only; may include pre-existing uncommitted changes._");
-  return parts.join("\n");
 }
 
 function helpText() {
@@ -480,7 +414,7 @@ Admin commands:
 - \`cf participants list|presets|add|show|remove\`
 
 Run flags: \`--prompt <text>\` | \`--prompt-file <file>\` | \`--context <note>\` | \`--no-handoff\` |
-\`--include-changes\`/\`--no-include-changes\` | \`--timeout-ms <ms>\` | \`--json\`
+\`--timeout-ms <ms>\` | \`--json\`
 
 Rules:
 

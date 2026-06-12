@@ -41,7 +41,6 @@ cf.mjs builds a "packet" for @zeus:
    • mode line           (read-only — or read-write if you made it write-capable)
    • handoff             (a snapshot of THIS session, from the transcript stash the hooks maintain)
    • your question
-   • git status/diff      (only if your prompt mentions latest changes / diff / patch)
    ▼
 Runs @zeus as an isolated, one-shot subprocess (read-only tools, no session persistence)
    ▼
@@ -116,7 +115,7 @@ Admin shortcuts: `/consensflow:status`, `/consensflow:doctor`, `/consensflow:pre
 
 Claude itself can also consult participants on its own initiative (the bundled skill encourages it before finalizing non-trivial designs/diffs) — consulting is free, **acting on the answer always needs your approval** unless you pre-authorized it.
 
-Say **"latest changes"** (or diff / patch / changed files) and your `git status` + diff ride along in the packet.
+Participants don't get your git state automatically — when you want a diff reviewed, paste the relevant parts into the prompt (or Claude includes them via `--context` when it consults on its own).
 
 ### Step 3 — Read the answer (and where it's saved)
 
@@ -130,7 +129,7 @@ The answer is relayed inline. Every run is saved under the ConsensFlow home — 
   result.json    # parsed answer + metadata
 ```
 
-A write-capable run also saves `post-run-changes.diff` — what changed on disk, for review before you keep it.
+After a write-capable run, review what changed yourself (e.g. `git status` / `git diff` in your repo) before keeping it.
 
 ### Images — the `@pygmalion` participant
 
@@ -152,13 +151,12 @@ cf status                        # participants + session stash + latest run
 cf doctor                        # which engine CLIs are installed
 cf participants presets|list|show @name|remove @name
 cf participants add <preset>|all|--name … --kind … --model …
-cf run @name <prompt> [--prompt-file f] [--context note] [--no-handoff]
-                      [--include-changes|--no-include-changes] [--timeout-ms n] [--json]
+cf run @name <prompt> [--prompt-file f] [--context note] [--no-handoff] [--timeout-ms n] [--json]
 ```
 
 ## Safety model
 
-- **Isolated & one-shot:** each participant runs in its own subprocess, scoped to your workspace (a `--cwd` that escapes it is rejected before launch). No memory between calls.
+- **Isolated & one-shot:** each participant runs in its own subprocess, started in your workspace (a `--cwd` that escapes it is rejected before launch, realpath-checked). Isolation comes from each engine's tool policy — a true OS sandbox only for Codex — so treat read-only as policy enforcement, not a hard sandbox. No memory between calls.
 - **Read-only enforcement per engine:** OS sandbox for Codex (`--sandbox read-only`), allow+deny tool lists for Claude Code, a read-only tool allowlist for Pi, and a deny-edit/bash permission override (`OPENCODE_PERMISSION`) for OpenCode.
 - **No recursion:** every child gets `CONSENSFLOW_CHILD=1` (hooks and the CLI bail inside it), and `claude` children run `--bare` so they don't load this plugin at all. Pi children run `--no-extensions`.
 - **Billing guard:** `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` are stripped from claude/codex children so runs stay on your subscription logins.

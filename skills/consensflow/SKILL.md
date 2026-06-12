@@ -35,7 +35,7 @@ The lead may, and should, reach for a participant on its own initiative, with NO
 - **To stress-test a plan** — `@athena` "Poke holes in this migration plan — what breaks under load or on rollback?"
 - **To surface unknowns before building** — `@iris` "What questions should I answer before I start implementing this?"
 - **For a quick gut-check or tie-breaker** — `@luna` "Does this error handling read as correct to you — yes/no with one reason?"
-- **For a focused diff review** — mention "latest changes" so git status + diff are attached automatically.
+- **For a focused diff review** — run `git diff` yourself and paste the relevant parts into the prompt or `--context` brief.
 
 ### 2. Acting on the output is GATED — never without asking
 
@@ -97,6 +97,6 @@ When the user's prompt addresses one configured participant — `@zeus What's th
 - **One-shot, no memory.** Each call is fresh. Continuity comes only from the handoff (re-sent each time), which already includes earlier participant replies — so a later participant can build on an earlier one (cross-pollination). For a genuinely *independent* opinion, ask that participant **first**, before others have replied — otherwise its handoff carries the prior answers and colors it.
 - **No live/shared transcript.** Participants get a one-shot serialized handoff, not a streamed or shared session. There is no shared room.
 - **The lead is always the decision-maker.** ConsensFlow routes a prompt and returns an answer; it never implements anything on its own. Acting on any answer goes through the gate above.
-- **Latest changes.** If the prompt mentions latest changes / diff / patch / changed files, git status + diff context is attached automatically.
+- **No automatic git context.** Participants receive only the handoff and the prompt — paste a diff or name the files when you want them reviewed.
 - **No hidden workflows.** Do not assume ceremonies like spec review, implementation review, council, grill, or handoff-by-name. The skill routes one prompt to one participant; that is all.
 - **No nesting.** Participant subprocesses run with `CONSENSFLOW_CHILD=1` and must not start their own ConsensFlow runs.

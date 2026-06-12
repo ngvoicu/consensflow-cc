@@ -25,7 +25,7 @@ Claude Code-native ConsensFlow package: a Claude Code **plugin** (skill + slash 
   - `runners.js` — per-engine invocation (`pi`/`claude-code`/`codex`/`opencode`) + output normalization + spawn/timeout. Deltas vs pi: `CHILD_ENV` (`CONSENSFLOW_CHILD=1`) on every child; `--bare` on claude children; image kind keeps the loud backstop throw (handled upstream).
   - `image.js` — `image`-kind generation: Codex Responses backend → gpt-image-2 (HTTP/SSE) + base64→PNG save. Ported from pi; pure helpers unit-tested.
   - `codex-auth.js` — reads `${CODEX_HOME|~/.codex}/auth.json` for the ChatGPT access token + account id (the CC analog of pi's `ctx.modelRegistry` openai-codex token). Read-only; refresh stays the codex CLI's job.
-  - `artifacts.js`, `utils.js` — git diff collection; tokenize/slugify/path-validation helpers. Verbatim from pi.
+  - `utils.js` — tokenize/slugify/path-validation helpers (`resolveInside` is realpath-checked). Verbatim from pi.
 - `scripts/` — hook entrypoints: `session-start-hook.mjs` (stash transcript path + roster context), `user-prompt-hook.mjs` (stash + route a single configured `@mention` into an injected run instruction), `hook-io.mjs` (stdin reader). Both bail under `CONSENSFLOW_CHILD` and always exit 0.
 - `hooks/hooks.json` — wires both hooks via `${CLAUDE_PLUGIN_ROOT}`.
 - `skills/consensflow/SKILL.md` — when/how the lead consults; home of the consent gate.
