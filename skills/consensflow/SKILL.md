@@ -20,8 +20,8 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" doctor        # which engine CLIs are in
 
 - Participants can take **minutes** (frontier models at high effort). Set a generous Bash timeout (600000 ms), or run in the background and poll.
 - `--context` adds a focused brief from you on top of the auto-included session handoff.
-- The handoff (a serialized snapshot of this session) is attached automatically from the transcript stash the plugin hooks maintain; `--no-handoff` skips it. The run output's `Handoff:` line reports what actually rode along — attached (with size), skipped, or empty (no stash); if it says empty, the participant saw none of this session.
-- The run prints the participant's answer plus run metadata; artifacts land in the workspace's run dir under `~/.consensflow/consensflow-cc/workspaces/…` (`packet.md`, `stdout.txt`, `stderr.txt`, `result.json`) — never inside the project.
+- The handoff (a serialized snapshot of this session) is attached automatically from the transcript stash the plugin hooks maintain; `--no-handoff` skips it. The run prints just the participant's answer; if no transcript was stashed it warns `Handoff: empty` — the participant saw none of this session.
+- Artifacts land in the workspace's run dir under `~/.consensflow/consensflow-cc/workspaces/…` (`packet.md`, `stdout.txt`, `stderr.txt`, `result.json`) — never inside the project. `packet.md` is byte-for-byte what the participant received; use `--json` when you need the full run metadata inline.
 
 ## The two rules that matter most
 

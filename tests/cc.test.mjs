@@ -324,7 +324,10 @@ test("e2e: all four engines run, parse, and persist artifacts through the real s
       assert.equal(run.exitCode, 0, `${ref}: ${run.stderr}`);
       assert.match(run.stdout, new RegExp(`# ${ref}`), `${ref}: header`);
       assert.ok(run.stdout.includes(expect), `${ref}: parsed engine output`);
-      assert.match(run.stdout, /get their approval before applying/, `${ref}: consent reminder`);
+      // Clean output: a successful read-only run shows just the answer — no run metadata, no
+      // consent boilerplate. (The `Handoff: empty` warning IS expected here: this test never
+      // stashes a transcript; the handoff e2e below covers when that line appears.)
+      assert.doesNotMatch(run.stdout, /Run:|Exit:|Artifacts:|approval/, `${ref}: no metadata noise`);
 
       const { packet, result } = await latestPacket(ws, dir);
       assert.match(packet, /# ConsensFlow Packet/);
@@ -395,7 +398,8 @@ test("e2e: the handoff from the session stash reaches the packet", async () => {
     }
     const second = await runCf(["run", "@zeus", "second", "question"], ctx);
     assert.equal(second.exitCode, 0, second.stderr);
-    assert.match(second.stdout, /Handoff: attached \(\d+ KB\)/);
+    // An attached handoff is the happy path — nothing about it appears in the output.
+    assert.doesNotMatch(second.stdout, /Handoff:/);
     const { packet } = await latestPacket(ws, dir);
     assert.match(packet, /## Handoff — current session/);
     assert.match(packet, /User:\nlet's design the cache/);
@@ -404,7 +408,8 @@ test("e2e: the handoff from the session stash reaches the packet", async () => {
     // not swallow the prompt as the flag's value.
     const third = await runCf(["run", "@zeus", "--no-handoff", "third", "question"], ctx);
     assert.equal(third.exitCode, 0, third.stderr);
-    assert.match(third.stdout, /Handoff: skipped \(--no-handoff\)/);
+    // An explicitly-skipped handoff is also quiet — the user asked for it.
+    assert.doesNotMatch(third.stdout, /Handoff:/);
     const noHandoff = await latestPacket(ws, dir);
     assert.doesNotMatch(noHandoff.packet, /## Handoff — current session/);
     assert.match(noHandoff.packet, /third question/);

@@ -25,9 +25,6 @@ import { effectiveTimeoutMs, runParticipant, spawnWithInput } from "../lib/runne
 import { createPacket } from "../lib/packets.js";
 import { effectiveToolsPolicy, participantForKind } from "../lib/workflows.js";
 
-const CONSULT_REMINDER =
-  "_Reminder: summarize this for the user with your recommendation, and get their approval before applying it (unless they already authorized you to proceed)._";
-
 async function main() {
   const cwd = process.cwd();
   const tokens = process.argv.slice(2);
@@ -212,8 +209,8 @@ async function handleRun(tokens, cwd) {
   // Image participants bypass the CLI runner: prompt-only (no packet/handoff), Codex backend.
   if (participant.kind === "image") return await runImageParticipant(cwd, participant, prompt, parsed.flags);
 
-  // The run output reports what context rode along: a silently-empty handoff (missing session
-  // stash) looks identical to a full one from the participant's answer alone.
+  // Only an unexpectedly-empty handoff is surfaced in the run output — a silently-missing session
+  // stash would otherwise look identical to a full handoff from the participant's answer alone.
   let handoff = "";
   let handoffSummary = "skipped (--no-handoff)";
   if (flagBool(parsed.flags, "handoff") ?? true) {
@@ -234,7 +231,7 @@ async function handleRun(tokens, cwd) {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
-  console.log(`${renderRunResult(result)}\n\n${CONSULT_REMINDER}`);
+  console.log(renderRunResult(result));
 }
 
 // Image generation doesn't fit the text-CLI runner: it calls the Codex Responses backend
@@ -378,10 +375,16 @@ function formatParticipantLine(p) {
   return p.description ? `${head}\n    ${p.description}` : head;
 }
 
+// Just the answer on a clean read-only run. Diagnostics appear only when they matter: the run
+// failed, the handoff was unexpectedly empty, or the participant could have written to the
+// workspace. Full metadata stays in result.json (and `--json`).
 function renderRunResult(result) {
   const writeCapable = effectiveToolsPolicy(result.participant) !== "readonly";
-  const lines = [`# @${result.participant.id}`, "", `Run: ${result.runId}`, `Exit: ${result.exitCode}${result.timedOut ? " (timed out)" : ""}`, `Artifacts: ${result.runDir}`];
-  if (result.handoffSummary) lines.push(`Handoff: ${result.handoffSummary}`);
+  const lines = [`# @${result.participant.id}`];
+  if (result.exitCode !== 0 || result.timedOut) {
+    lines.push("", `Run failed: exit ${result.exitCode}${result.timedOut ? " (timed out)" : ""} — artifacts: ${result.runDir}`);
+  }
+  if (result.handoffSummary?.startsWith("empty")) lines.push("", `Handoff: ${result.handoffSummary}`);
   if (writeCapable) lines.push("", "> Write-capable run: this participant could edit files and run commands. Inspect what changed in the workspace (e.g. `git status` / `git diff` in a repo) and review it before keeping or building on it.");
   lines.push("", result.output);
   return lines.join("\n");
