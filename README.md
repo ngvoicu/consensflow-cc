@@ -97,7 +97,7 @@ Or fully custom (any model string the engine accepts — values pass through ver
 
 ```text
 /consensflow:participants add --name Sonnet --kind claude-code --model claude-sonnet-4-6 --effort high
-/consensflow:participants add --name Builder --kind opencode --model openrouter/moonshotai/kimi-k2.6 --tools workspace-write
+/consensflow:participants add --name Builder --kind opencode --model openrouter/moonshotai/kimi-k2.7-code --tools workspace-write
 ```
 
 > **Read-only vs write.** By default a participant can only read. For one that can actually edit files and run commands, pass `--tools workspace-write` (or `full-auto`) — write access is never implicit.

@@ -109,7 +109,7 @@ test("participant presets mirror consensflow-pi exactly (image preset included)"
     "orpheus", "linus", "erato", "saga", "gunnlod", "kvasir",
     "kronos", "atlas", "baldr", "vali", "forseti", "bragi", "ullr",
     "hermod", "loki", "nike", "freya", "zephyros", "sif",
-    "hades", "helios", "ares", "hephaestus", "pan", "aeolus", "metis",
+    "hades", "helios", "ares", "hephaestus", "pan", "aeolus", "metis", "selene",
     "odin", "heimdall", "thor", "tyr", "vidar", "njord", "mimir",
     "pygmalion",
   ]);
@@ -127,9 +127,13 @@ test("participant presets mirror consensflow-pi exactly (image preset included)"
   assert.equal(getPreset("baldr").model, "openrouter/anthropic/claude-opus-4.8");
   assert.equal(getPreset("forseti").model, "openrouter/openai/gpt-5.5");
   // Effort vocabularies are engine-real: "max" exists only on claude-code; OpenRouter tops out
-  // at xhigh, and models without catalog variants (e.g. Kimi K2.6) carry no effort at all.
+  // at xhigh, and models without catalog variants (e.g. Kimi K2.7 Code) carry no effort at all.
   assert.equal(getPreset("baldr").effort, "xhigh");
   assert.equal(getPreset("luna").effort, undefined);
+  // Kimi K2.7 Code runs on both engines: luna (opencode) and selene (pi, high thinking).
+  assert.equal(getPreset("luna").model, "openrouter/moonshotai/kimi-k2.7-code");
+  assert.equal(getPreset("selene").model, "openrouter/moonshotai/kimi-k2.7-code");
+  assert.equal(getPreset("selene").thinking, "high");
   assert.equal(getPreset("heimdall").effort, "high");
   assert.equal(getPreset("sif").effort, "low");
   // Fable 5 family follows the same rules: claude-code gets max, the rest cap at xhigh.
@@ -193,9 +197,9 @@ test("every preset survives normalize + runner invocation with correct flags (al
 test("runner invocation maps tool policies", () => {
   assert.equal(toolsForPi("readonly"), "read,grep,find,ls");
   assert.equal(codexSandbox("workspace-write"), "workspace-write");
-  const pi = buildRunnerInvocation({ kind: "pi", model: "openrouter/moonshotai/kimi-k2.6", toolsPolicy: "readonly", skillsPolicy: "default" }, "/tmp/packet.md", "/repo");
+  const pi = buildRunnerInvocation({ kind: "pi", model: "openrouter/moonshotai/kimi-k2.7-code", toolsPolicy: "readonly", skillsPolicy: "default" }, "/tmp/packet.md", "/repo");
   assert.equal(pi.command, "pi");
-  assert.deepEqual(pi.args.slice(0, 6), ["--mode", "json", "--no-session", "--no-extensions", "--model", "openrouter/moonshotai/kimi-k2.6"]);
+  assert.deepEqual(pi.args.slice(0, 6), ["--mode", "json", "--no-session", "--no-extensions", "--model", "openrouter/moonshotai/kimi-k2.7-code"]);
   assert.ok(pi.args.includes("off"));
   assert.equal(pi.args.includes("--no-skills"), false);
   const sterilePi = buildRunnerInvocation({ kind: "pi", toolsPolicy: "readonly", skillsPolicy: "none" }, "/tmp/packet.md", "/repo");
