@@ -89,7 +89,7 @@ Same presets as consensflow-pi (49 curated presets — every model+effort family
 ```text
 /consensflow:presets                         # see all presets
 /consensflow:participants add zeus           # add one        → @zeus
-/consensflow:participants add kimi           # Pi-backed Kimi K2.7 Code → @kimi
+/consensflow:participants add daedalus       # Pi-backed Kimi K2.7 Code → @daedalus
 /consensflow:participants add all            # add everything
 /consensflow:participants add zeus --name Deepreview   # renamed copy
 ```

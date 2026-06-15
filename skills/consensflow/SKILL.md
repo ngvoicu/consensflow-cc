@@ -97,7 +97,7 @@ Participants are configured in the shared roster `~/.consensflow/participants.js
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants presets                    # list built-in presets
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add zeus                   # add a preset → @zeus
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add kimi                   # Pi-backed Kimi K2.7 Code → @kimi
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add daedalus               # Pi-backed Kimi K2.7 Code → @daedalus
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add all                    # add every preset
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add zeus --name Deepreview # preset backend, renamed → @deepreview
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name Builder --kind codex --model gpt-5.5 --effort high --tools workspace-write   # fully custom, write-capable
@@ -108,7 +108,7 @@ Presets use default review mode; the same model+effort family exists on every en
 - **Fable 5** (Anthropic's top model — use for the questions that really matter): `@calliope`/`@clio`/`@euterpe`/`@thalia` (Claude Code max/xhigh/high/medium), `@orpheus`/`@linus`/`@erato` (Pi xhigh/high/medium, Anthropic auth), `@saga`/`@gunnlod`/`@kvasir` (OpenCode xhigh/high/medium via OpenRouter).
 - **Opus 4.8**: `@zeus`/`@apollo`/`@artemis` (Claude Code max/xhigh/medium), `@kronos`/`@atlas` (Pi xhigh/medium, Anthropic auth), `@baldr`/`@vali` (OpenCode xhigh/medium via OpenRouter; xhigh is the ceiling outside claude-code).
 - **GPT 5.5**: `@athena`/`@perseus`/`@loki` (Codex xhigh/high/medium), `@iris`/`@hermes`/`@eos` (Pi xhigh/high/medium), `@forseti`/`@bragi`/`@ullr` (OpenCode xhigh/high/medium via OpenRouter).
-- **Deep open-weights**: Kimi K2.7 Code — `@luna` (OpenCode), `@kimi` (Pi, direct name), `@selene` (Pi mythic alias; both Pi presets use high thinking).
+- **Deep open-weights**: Kimi K2.7 Code — `@luna` (OpenCode), `@daedalus` (Pi craftsman preset), `@selene` (Pi moon-goddess alias; both Pi presets use high thinking).
 - **Fast/cheap tier** (quick gut-checks): `@hermod` (Claude Haiku 4.5), `@nike`/`@sif` (Gemini 3.5 Flash on Pi/OpenCode), `@zephyros`/`@freya` (DeepSeek V4 Flash on Pi/OpenCode).
 - **Model zoo** (same OpenRouter models on two engines; Greek = pi, Norse = opencode): DeepSeek V4 Pro `@hades`/`@odin`, Gemini 3.1 Pro `@helios`/`@heimdall`, Grok 4.3 `@ares`/`@thor`, Qwen3.7 Max `@hephaestus`/`@tyr`, Llama 4 Maverick `@pan`/`@vidar`, Mistral Large `@aeolus`/`@njord`, MiniMax M3 `@metis`/`@mimir`.
 - **Image**: `@pygmalion` (kind=image) generates a picture with gpt-image-2 via the Codex CLI login (`codex login`) — prompt-only (no handoff), PNG saved as `image.png` in the run dir; open it with the Read tool to view or show it.
