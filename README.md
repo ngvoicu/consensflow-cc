@@ -84,11 +84,12 @@ claude plugin validate /path/to/consensflow-cc
 
 ### Step 1 — Configure participants
 
-Same presets as consensflow-pi (48 curated presets — every model+effort family on every engine that runs it, including the `@pygmalion` image preset; `/consensflow:presets` prints the full list):
+Same presets as consensflow-pi (49 curated presets — every model+effort family on every engine that runs it, including the `@pygmalion` image preset; `/consensflow:presets` prints the full list):
 
 ```text
 /consensflow:presets                         # see all presets
 /consensflow:participants add zeus           # add one        → @zeus
+/consensflow:participants add kimi           # Pi-backed Kimi K2.7 Code → @kimi
 /consensflow:participants add all            # add everything
 /consensflow:participants add zeus --name Deepreview   # renamed copy
 ```
