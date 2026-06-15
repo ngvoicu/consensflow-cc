@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ConsensFlow CC — the CLI the Claude Code lead drives via the Bash tool.
-// Mirrors consensflow-pi's /cf router: participants admin, doctor, status, and one-at-a-time runs.
+// Mirrors consensflow-pi's /consensflow:cf router: participants admin, doctor, status, and one-at-a-time runs.
 import fs from "node:fs/promises";
 import path from "node:path";
 import { codexAuthPath, loadCodexAuth } from "../lib/codex-auth.js";
@@ -32,7 +32,7 @@ async function main() {
   const tokens = process.argv.slice(2);
   if (tokens.length === 0) return await handleStatus(cwd);
 
-  // Bare `cf @zeus <prompt>` routes like `cf run @zeus <prompt>` (parity with pi's /cf @zeus).
+  // Bare `cf @zeus <prompt>` routes like `cf run @zeus <prompt>` (parity with /consensflow:cf @zeus).
   const command = tokens[0].startsWith("@") ? "run" : tokens.shift();
   switch (command) {
     case "status":
@@ -173,7 +173,7 @@ async function handleParticipants(tokens, cwd) {
 
     if (presetRef) {
       throw new Error(
-        `Unknown preset: ${presetRef}\n\nPresets: ${listPresetIds().join(", ")} (rename any with --name).\n\nOr create a custom participant:\n  /consensflow:participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--tools <readonly|workspace-write|full-auto>]`,
+        `Unknown preset: ${presetRef}\n\nPresets: ${listPresetIds().join(", ")} (rename any with --name).\n\nOr create a custom participant:\n  /consensflow:participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--tools <workspace-write|full-auto>]`,
       );
     }
     throw new Error(addUsage());
@@ -228,7 +228,7 @@ async function handleRun(tokens, cwd) {
 
   // Per-call tools override: `--rw` is shorthand for workspace-write, or `--tools <policy>` for an
   // exact policy. The stored policy is the default; an explicit flag makes this one run write-capable
-  // (or read-only) without a second roster entry. An invalid --tools value throws (validated downstream).
+  // without a second roster entry. An invalid --tools value throws (validated downstream).
   const toolsOverride = parsed.flags.rw === true ? "workspace-write" : stringFlag(parsed.flags.tools);
   const effective = participantForKind(participant, "ask", toolsOverride);
   const packet = await createPacket({ cwd, participant: effective, kind: "ask", task: prompt, extraContext: stringFlag(parsed.flags.context), handoff });
@@ -351,7 +351,7 @@ function addUsage() {
     "Usage:",
     "  /consensflow:participants add <preset> [--name <name>]   # from a preset, optionally renamed",
     "  /consensflow:participants add all                         # every preset",
-    "  /consensflow:participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--thinking <t>] [--tools <readonly|workspace-write|full-auto>] [--cwd <subdir>]",
+    "  /consensflow:participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--thinking <t>] [--tools <workspace-write|full-auto>] [--cwd <subdir>]",
     "",
     `Presets: ${listPresetIds().join(", ")}`,
   ].join("\n");
@@ -393,7 +393,7 @@ function formatParticipantLine(p) {
   return p.description ? `${head}\n    ${p.description}` : head;
 }
 
-// Just the answer on a clean read-only run. Diagnostics appear only when they matter: the run
+// Just the answer on a clean default-mode run. Diagnostics appear only when they matter: the run
 // failed, the handoff was unexpectedly empty, or the participant could have written to the
 // workspace. Full metadata stays in result.json (and `--json`).
 function renderRunResult(result) {
@@ -443,13 +443,13 @@ Manage participants (shared across Claude Code and Pi, ${participantsPath(proces
 
 For the lead (via the Bash tool), the CLI subcommands are \`status\` | \`doctor\` |
 \`participants list|presets|add|show|remove\` | \`run @name <prompt>\`, with run flags
-\`--prompt <text>\` | \`--prompt-file <file>\` | \`--context <note>\` | \`--no-handoff\` |
-\`--timeout-ms <ms>\` | \`--json\`.
+\`--stream\` | \`--rw\` | \`--tools workspace-write|full-auto\` | \`--prompt <text>\` |
+\`--prompt-file <file>\` | \`--context <note>\` | \`--no-handoff\` | \`--timeout-ms <ms>\` | \`--json\`.
 
 Rules:
 
 - Send to one participant at a time.
-- Participants are read-only unless you explicitly configure \`--tools workspace-write\` or
+- Participants use default review mode unless you explicitly configure \`--tools workspace-write\` or
   \`full-auto\` (a write-capable participant can edit files and run commands).
 - One-shot: participants do not remember previous calls; each call re-sends the current session handoff.
 - The current Claude Code session remains the lead and decides what to implement.

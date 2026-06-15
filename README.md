@@ -20,7 +20,7 @@ The whole idea in five bullets:
 
 - **Participant** = a named *(agent + model)* combo. Configure once, reuse from any project. The roster is **shared across both tools** at `~/.consensflow/participants.json` — set it up once, use it from pi and cc.
 - **One at a time.** `@zeus @athena …` is rejected — ask one, read, then ask the next.
-- **Read-only by default.** A participant can look at your files but not change them, unless you explicitly make it write-capable.
+- **Safe by default.** A participant starts in review mode; use `--rw` or `--tools workspace-write` only when you want that call to edit files or run commands.
 - **One-shot, but context-aware.** Each call is fresh (no memory of past calls), yet it always receives the current session handoff — *including earlier participants' answers* — so the 2nd agent you ask can build on the 1st.
 - **The lead can ask too — and asks before applying.** Claude Code will consult a participant on its own initiative when a second opinion would help, then report back and get your go-ahead before applying anything — unless you pre-authorized it.
 
@@ -38,11 +38,11 @@ Claude (the lead) executes via the Bash tool:
    ▼
 cf.mjs builds a "packet" for @zeus:
    • who @zeus is        (claude-code · claude-opus-4-8 · max)
-   • mode line           (read-only — or read-write if you made it write-capable)
+   • mode line           (review mode — or write mode if you made it write-capable)
    • handoff             (a snapshot of THIS session, from the transcript stash the hooks maintain)
    • your question
    ▼
-Runs @zeus as an isolated, one-shot subprocess (read-only tools, no session persistence)
+Runs @zeus as an isolated, one-shot subprocess (default review mode, no session persistence)
    ▼
 Saves artifacts:  ~/.consensflow/workspaces/<ws>/runs/<run-id>/{packet.md, stdout.txt, stderr.txt, result.json}
    ▼
@@ -100,7 +100,7 @@ Or fully custom (any model string the engine accepts — values pass through ver
 /consensflow:participants add --name Builder --kind opencode --model openrouter/moonshotai/kimi-k2.7-code --tools workspace-write
 ```
 
-> **Read-only vs write.** By default a participant can only read. For one that can actually edit files and run commands, pass `--tools workspace-write` (or `full-auto`) — write access is never implicit.
+> **Default vs write.** By default a participant is a reviewer. To let one edit files and run commands, pass `--tools workspace-write` (or `full-auto`) when creating it, or use `--rw` on a single run — write access is never implicit.
 
 Config lives in the **shared** roster `~/.consensflow/participants.json` — used by both consensflow-cc and consensflow-pi, so a participant added in one is immediately available in the other. There are no per-tool config roots. If this shared file is missing but an older per-tool roster exists at `~/.consensflow/consensflow-cc/participants.json` or `~/.consensflow/consensflow-pi/participants.json`, ConsensFlow migrates those entries into the shared file once.
 
@@ -132,7 +132,7 @@ The answer is relayed inline. Every run is saved under the ConsensFlow home — 
 
 **Watch it work live:** add `--stream` (`cf run @name <prompt> --stream`) to render the participant's thinking, tool calls, and answer to stdout as they arrive — foreground-incremental, so the lead relays them into the session. Without `--stream` you get just the clean final answer; either way the run writes `transcript.md` so a killed or backgrounded run isn't lost. On a timeout you get the partial trail under a clear header — never a raw event dump.
 
-After a write-capable run, review what changed yourself (e.g. `git status` / `git diff` in your repo) before keeping it. **Per-call write:** a participant is read-only by default; add `--rw` (or `--tools workspace-write`) to make it write-capable for one run — no second roster entry needed.
+After a write-capable run, review what changed yourself (e.g. `git status` / `git diff` in your repo) before keeping it. **Per-call write:** add `--rw` (or `--tools workspace-write`) to make only that run write-capable — no second roster entry needed.
 
 ### The handoff — what a participant actually sees
 
@@ -182,14 +182,14 @@ cf status                        # participants + session stash + latest run
 cf doctor                        # which engine CLIs are installed
 cf participants presets|list|show @name|remove @name
 cf participants add <preset>|all|--name … --kind … --model …
-cf run @name <prompt> [--stream] [--rw | --tools <policy>] [--prompt-file f] [--context note] [--no-handoff] [--timeout-ms n] [--json]
+cf run @name <prompt> [--stream] [--rw | --tools workspace-write|full-auto] [--prompt-file f] [--context note] [--no-handoff] [--timeout-ms n] [--json]
 #   flags go AFTER the prompt; --stream streams events live, --rw makes this run write-capable
 ```
 
 ## Safety model
 
-- **Isolated & one-shot:** each participant runs in its own subprocess, started in your workspace (a `--cwd` that escapes it is rejected before launch, realpath-checked). Isolation comes from each engine's tool policy — a true OS sandbox only for Codex — so treat read-only as policy enforcement, not a hard sandbox. No memory between calls.
-- **Read-only enforcement per engine:** OS sandbox for Codex (`--sandbox read-only`), allow+deny tool lists for Claude Code, a read-only tool allowlist for Pi, and a deny-edit/bash permission override (`OPENCODE_PERMISSION`) for OpenCode.
+- **Isolated & one-shot:** each participant runs in its own subprocess, started in your workspace (a `--cwd` that escapes it is rejected before launch, realpath-checked). Isolation comes from each engine's tool policy — a true OS sandbox only for Codex — so treat the default review mode as policy enforcement, not a hard sandbox. No memory between calls.
+- **Default-mode enforcement per engine:** OS no-write sandbox for Codex, allow+deny tool lists for Claude Code, a limited tool allowlist for Pi, and a deny-edit/bash permission override (`OPENCODE_PERMISSION`) for OpenCode.
 - **No recursion:** every child gets `CONSENSFLOW_CHILD=1` (hooks and the CLI bail inside it), and `claude` children run `--bare` so they don't load this plugin at all. Pi children run `--no-extensions`.
 - **Billing guard:** `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` are stripped from claude/codex children so runs stay on your subscription logins.
 - **You're always the lead.** ConsensFlow routes your question and shows you the answer — Claude summarizes and asks before applying anything, unless you've already told it to proceed.
@@ -201,7 +201,7 @@ cf run @name <prompt> [--stream] [--rw | --tools <policy>] [--prompt-file f] [--
 | Host | Pi extension (`pi install …`) | Claude Code plugin (`--plugin-dir` / marketplace) |
 | @mention routing | input interception in the extension | `UserPromptSubmit` hook injects the run command |
 | Handoff source | `ctx.sessionManager.getBranch()` | session transcript JSONL, stashed by hooks into the workspace's `session.json` under the ConsensFlow home |
-| Per-participant `/name` commands | yes (registered at load) | no — use `@name` or `/consensflow:cf` |
+| Per-participant `/name` commands | no — use `@name` or `/consensflow:cf` | no — use `@name` or `/consensflow:cf` |
 | Image participants (`@pygmalion`) | yes (Pi's openai-codex login) | yes (the Codex CLI's login, `~/.codex/auth.json`) |
 | Participant roster | `~/.consensflow/participants.json` (shared with cc) | `~/.consensflow/participants.json` (shared with pi) |
 | Everything else (presets, packet, runners, policies, artifacts) | identical | identical |
