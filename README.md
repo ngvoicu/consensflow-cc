@@ -102,7 +102,7 @@ Or fully custom (any model string the engine accepts — values pass through ver
 
 > **Read-only vs write.** By default a participant can only read. For one that can actually edit files and run commands, pass `--tools workspace-write` (or `full-auto`) — write access is never implicit.
 
-Config lives in the **shared** roster `~/.consensflow/participants.json` — used by both consensflow-cc and consensflow-pi, so a participant added in one is immediately available in the other. There are no per-tool config roots.
+Config lives in the **shared** roster `~/.consensflow/participants.json` — used by both consensflow-cc and consensflow-pi, so a participant added in one is immediately available in the other. There are no per-tool config roots. If this shared file is missing but an older per-tool roster exists at `~/.consensflow/consensflow-cc/participants.json` or `~/.consensflow/consensflow-pi/participants.json`, ConsensFlow migrates those entries into the shared file once.
 
 ### Step 2 — Ask
 

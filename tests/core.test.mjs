@@ -353,7 +353,7 @@ test("participantsPath and artifact root live directly under the shared ConsensF
   });
 });
 
-test("legacy per-tool participant files are not read; the shared root file is the only config [STRM-27]", async () => {
+test("legacy per-tool participant files migrate once when the shared root file is missing [STRM-27]", async () => {
   await withTempDir(async (cwd) => {
     const home = process.env.CONSENSFLOW_HOME;
     await mkdir(path.join(home, "consensflow-pi"), { recursive: true });
@@ -369,12 +369,20 @@ test("legacy per-tool participant files are not read; the shared root file is th
       "utf8",
     );
 
-    assert.equal(await getParticipant(cwd, "@pi-only"), null);
-    assert.equal(await getParticipant(cwd, "@cc-only"), null);
-    assert.deepEqual(await loadParticipants(cwd), []);
+    assert.deepEqual((await loadParticipants(cwd)).map((p) => p.id).sort(), ["cc-only", "pi-only"]);
+    const root = JSON.parse(await readFile(path.join(home, "participants.json"), "utf8"));
+    assert.deepEqual(root.participants.map((p) => p.id).sort(), ["cc-only", "pi-only"]);
+    assert.equal((await getParticipant(cwd, "@cc-only")).kind, "claude-code");
 
+    // After the shared file exists, legacy files are ignored; root remains authoritative.
+    await writeFile(
+      path.join(home, "consensflow-cc", "participants.json"),
+      JSON.stringify({ schemaVersion: 1, participants: [{ id: "ghost", name: "Ghost", kind: "codex", toolsPolicy: "readonly" }] }),
+      "utf8",
+    );
+    assert.equal(await getParticipant(cwd, "@ghost"), null);
     await upsertParticipant(cwd, { name: "Root Only", kind: "opencode", model: "openrouter/test" });
-    assert.deepEqual((await loadParticipants(cwd)).map((p) => p.id), ["root-only"]);
+    assert.deepEqual((await loadParticipants(cwd)).map((p) => p.id).sort(), ["cc-only", "pi-only", "root-only"]);
     assert.equal((await getParticipant(cwd, "@root-only")).model, "openrouter/test");
   });
 });
