@@ -131,7 +131,7 @@ The answer is relayed inline. Every run is saved under the ConsensFlow home — 
   transcript.md  # human-readable thinking / tool calls / answer — the durability backstop
 ```
 
-**Watch it work live:** add `--stream` (`cf run @name <prompt> --stream`) to render the participant's thinking, tool calls, and answer to stdout as they arrive — foreground-incremental, so the lead relays them into the session. Without `--stream` you get just the clean final answer; either way the run writes `transcript.md` so a killed or backgrounded run isn't lost. On a timeout you get the partial trail under a clear header — never a raw event dump.
+**Watch it work live:** routed `@name` prompts use `--stream` so the participant's thinking, tool calls, and answer render to stdout as they arrive; explicit `/consensflow:cf` participant runs should do the same. If you invoke the CLI manually, add `--stream` (`cf run @name <prompt> --stream`). Without `--stream` you get just the clean final answer; either way the run writes `transcript.md` as a durability backstop. On a timeout you get the partial trail under a clear header — never a raw event dump.
 
 After a write-capable run, review what changed yourself (e.g. `git status` / `git diff` in your repo) before keeping it. **Per-call write:** add `--rw` (or `--tools workspace-write`) to make only that run write-capable — no second roster entry needed.
 

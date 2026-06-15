@@ -177,6 +177,8 @@ test("user-prompt hook routes a configured @mention to a run instruction with a 
     assert.equal(output.hookSpecificOutput.hookEventName, "UserPromptSubmit");
     assert.match(context, /addresses the participant @zeus/);
     assert.match(context, /run @zeus --prompt-file/);
+    assert.match(context, /--stream/);
+    assert.match(context, /foreground/);
     assert.match(context, /without the user's approval/);
     // The stash lives under the config home, keyed by workspace — never inside the project.
     const promptFile = context.match(/--prompt-file "([^"]+)"/)[1];

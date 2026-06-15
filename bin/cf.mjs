@@ -234,7 +234,7 @@ async function handleRun(tokens, cwd) {
   const packet = await createPacket({ cwd, participant: effective, kind: "ask", task: prompt, extraContext: stringFlag(parsed.flags.context), handoff });
   // PRIMARY observability path: with --stream, render normalized events to stdout as they arrive,
   // so the lead can relay the participant's thinking / tool calls / answer into this session
-  // (foreground-incremental; a backgrounded run surfaces on completion). Suppressed under --json
+  // (foreground-incremental). Suppressed under --json
   // so the streamed lines can't corrupt the JSON payload.
   const onEvent = parsed.flags.stream === true && parsed.flags.json !== true
     ? (event) => { const line = renderEvent(event); if (line) process.stdout.write(`${line}\n`); }

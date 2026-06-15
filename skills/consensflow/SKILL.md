@@ -20,8 +20,8 @@ Use participants for all of these, one participant at a time. No preset is intri
 Everything the Claude Code lead does goes through the bundled CLI via the Bash tool. Use a generous Bash timeout for frontier models (often `600000` ms or more).
 
 ```bash
-# Ask one participant (default safe mode: no write tools)
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "What's the riskiest part of this design?"
+# Ask one participant (default safe mode: no write tools) and stream its trail in the foreground
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "What's the riskiest part of this design?" --stream
 
 # Add a focused brief on top of the automatic session handoff
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "Review the auth flow" --context "Focus on rollback and token expiry"
@@ -41,7 +41,7 @@ Important run flags (place flags **after** the prompt/ref; `--prompt-file` may s
 
 - `--context <note>` — focused lead brief in addition to the auto-included handoff.
 - `--no-handoff` — skip the session handoff.
-- `--stream` — render live normalized events as the child works.
+- `--stream` — render live normalized events as the child works. Use this for normal foreground participant runs unless the user asked for JSON/background behavior.
 - `--rw` — shorthand for `--tools workspace-write` for this run only.
 - `--tools workspace-write|full-auto` — per-call write override; does not mutate the roster.
 - `--timeout-ms <ms>` — per-call timeout override.
