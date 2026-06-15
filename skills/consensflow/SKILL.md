@@ -5,7 +5,15 @@ description: Use ConsensFlow inside Claude Code to consult one named participant
 
 # ConsensFlow
 
-ConsensFlow lets the lead (this Claude Code session) consult one named participant at a time. A participant is an external coding-agent CLI (claude / codex / opencode / pi) run as an isolated one-shot subprocess: it receives a handoff of the current session plus a prompt, answers once, and does not persist between calls. Talking to a participant is like phoning an advisor — the lead stays the decision-maker and ConsensFlow never implements anything on its own.
+ConsensFlow lets the lead (this Claude Code session) consult one named participant at a time. A participant is an external coding-agent CLI (claude / codex / opencode / pi) run as an isolated one-shot subprocess: it receives a handoff of the current session plus a prompt, answers once, and does not persist between calls. Talking to a participant is like phoning an advisor — or, when explicitly made write-capable, briefly handing a task to a helper. The lead stays the decision-maker and ConsensFlow never accepts or keeps participant work on its own.
+
+## What participants can do
+
+Use participants for all of these, one participant at a time:
+
+- **Review / second opinion / design critique.** This is the default use: ask a read-only participant to inspect context, critique a plan, review a pasted diff, identify risks, or suggest tests.
+- **Code-writing help.** A participant can also implement, refactor, or run commands when it is write-capable (`--rw`, `--tools workspace-write`, `--tools full-auto`, or a stored write-capable roster entry). Treat it like a temporary helper: after the run, inspect `git status` / `git diff` and relevant tests, then ask the user before keeping or building on the changes unless they pre-authorized it.
+- **Image generation.** `@pygmalion` (or any `kind=image` participant) uses **gpt-image-2** via the Codex backend / Codex CLI login. It receives the image prompt only — no session handoff — saves `image.png` in the ConsensFlow run dir under `~/.consensflow/workspaces/…`, and the lead can open/show that file with the Read tool.
 
 ## How to run it
 
