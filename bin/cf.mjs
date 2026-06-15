@@ -385,8 +385,11 @@ function formatParticipantLine(p) {
   const cwd = p.cwd ? ` cwd=${p.cwd}` : "";
   const skills = p.kind === "pi" ? ` skills=${p.skillsPolicy ?? "default"}` : "";
   const preset = p.preset ? ` preset=${p.preset}` : "";
-  // effectiveToolsPolicy normalizes a missing policy to the readonly default.
-  const head = `- @${p.id} (${p.kind}${model}${effort}${cwd}${skills}${preset}) tools=${effectiveToolsPolicy(p)}`;
+  // Read-only is the quiet/default display. Only surface persistent write-capable roster entries;
+  // per-call --rw / --tools overrides remain explicit at run time.
+  const policy = effectiveToolsPolicy(p);
+  const access = policy === "readonly" ? "" : ` access=${policy}`;
+  const head = `- @${p.id} (${p.kind}${model}${effort}${cwd}${skills}${preset})${access}`;
   return p.description ? `${head}\n    ${p.description}` : head;
 }
 
