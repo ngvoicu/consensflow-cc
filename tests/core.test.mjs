@@ -218,8 +218,8 @@ test("runner invocation maps tool policies", () => {
 });
 
 test("readonly enforcement reaches every engine: claude allow+deny lists, opencode permission env", () => {
-  // Claude readonly: explorers allowed, write tools explicitly denied (a user-level Bash
-  // allowlist must not leak write capability into a read-only reviewer).
+  // Claude default safe mode: explorers allowed, write tools explicitly denied (a user-level Bash
+  // allowlist must not leak write capability into a safe-mode participant).
   const claude = buildRunnerInvocation({ kind: "claude-code", toolsPolicy: "readonly" }, "/tmp/packet.md", "/repo");
   assert.ok(claude.args.includes("Read,Grep,Glob"));
   const denyIndex = claude.args.indexOf("--disallowedTools");

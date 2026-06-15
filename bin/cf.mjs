@@ -385,7 +385,7 @@ function formatParticipantLine(p) {
   const cwd = p.cwd ? ` cwd=${p.cwd}` : "";
   const skills = p.kind === "pi" ? ` skills=${p.skillsPolicy ?? "default"}` : "";
   const preset = p.preset ? ` preset=${p.preset}` : "";
-  // Read-only is the quiet/default display. Only surface persistent write-capable roster entries;
+  // Safe mode is the quiet/default display. Only surface persistent write-capable roster entries;
   // per-call --rw / --tools overrides remain explicit at run time.
   const policy = effectiveToolsPolicy(p);
   const access = policy === "readonly" ? "" : ` access=${policy}`;
@@ -393,7 +393,7 @@ function formatParticipantLine(p) {
   return p.description ? `${head}\n    ${p.description}` : head;
 }
 
-// Just the answer on a clean default-mode run. Diagnostics appear only when they matter: the run
+// Just the answer on a clean default safe-mode run. Diagnostics appear only when they matter: the run
 // failed, the handoff was unexpectedly empty, or the participant could have written to the
 // workspace. Full metadata stays in result.json (and `--json`).
 function renderRunResult(result) {
@@ -449,7 +449,7 @@ For the lead (via the Bash tool), the CLI subcommands are \`status\` | \`doctor\
 Rules:
 
 - Send to one participant at a time.
-- Participants use default review mode unless you explicitly configure \`--tools workspace-write\` or
+- Participants use default safe mode (no write tools) unless you explicitly configure \`--tools workspace-write\` or
   \`full-auto\` (a write-capable participant can edit files and run commands).
 - One-shot: participants do not remember previous calls; each call re-sends the current session handoff.
 - The current Claude Code session remains the lead and decides what to implement.

@@ -23,7 +23,7 @@ try {
     : "none configured yet — `participants add <preset>` (see `participants presets`)";
   console.log(
     [
-      "ConsensFlow is available: consult one named AI participant (an external coding-agent CLI, run one-shot with a session handoff) for a review or second opinion.",
+      "ConsensFlow is available: consult one named AI participant (an external coding-agent CLI, run one-shot with a session handoff) for advice, second opinions, implementation help, or write-capable task execution.",
       `CLI: node "${CLI_PATH}" — subcommands: status | doctor | participants … | run @name <prompt>`,
       `Participants: ${roster}`,
       "Consulting is free and encouraged (one at a time). Acting is gated: never apply a participant's advice or file changes without the user's approval, unless they pre-authorized it.",
