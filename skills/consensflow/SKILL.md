@@ -9,19 +9,40 @@ ConsensFlow lets the lead (this Claude Code session) consult one named participa
 
 ## How to run it
 
-Everything goes through the bundled CLI, via the Bash tool:
+Everything the Claude Code lead does goes through the bundled CLI via the Bash tool. Use a generous Bash timeout for frontier models (often `600000` ms or more).
 
 ```bash
+# Ask one participant (read-only by default)
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "What's the riskiest part of this design?"
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus --prompt-file question.md --context "Focus on the auth flow"
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" status        # participants + latest run
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" doctor        # which engine CLIs are installed
+
+# Add a focused brief on top of the automatic session handoff
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "Review the auth flow" --context "Focus on rollback and token expiry"
+
+# Use a prompt file when the hook stashes a user @mention, or when the prompt is large
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus --prompt-file question.md
+
+# Stream normalized thinking / tool / answer events live; without --stream the CLI prints only the final answer
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "Review this diff" --stream
+
+# Per-call write access: use only when explicitly needed; the approval gate still applies afterward
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @builder "Make the minimal fix" --rw
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @builder "Make the minimal fix" --tools workspace-write
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @builder "Review only; do not edit" --tools readonly
 ```
 
-- Participants can take **minutes** (frontier models at high effort). Set a generous Bash timeout (600000 ms), or run in the background and poll.
-- `--context` adds a focused brief from you on top of the auto-included session handoff.
-- The handoff (a serialized snapshot of this session) is attached automatically from the transcript stash the plugin hooks maintain; `--no-handoff` skips it. The run prints just the participant's answer; if no transcript was stashed it warns `Handoff: empty` — the participant saw none of this session.
-- Artifacts land in the workspace's run dir under `~/.consensflow/workspaces/…` (`packet.md`, `stdout.txt`, `stderr.txt`, `result.json`) — never inside the project. `packet.md` is byte-for-byte what the participant received; use `--json` when you need the full run metadata inline.
+Important run flags (place flags **after** the prompt/ref; `--prompt-file` may stand in for the prompt):
+
+- `--context <note>` — focused lead brief in addition to the auto-included handoff.
+- `--no-handoff` — skip the session handoff.
+- `--stream` — render live normalized events as the child works.
+- `--rw` — shorthand for `--tools workspace-write` for this run only.
+- `--tools readonly|workspace-write|full-auto` — per-call tools override; does not mutate the roster.
+- `--timeout-ms <ms>` — per-call timeout override.
+- `--json` — print full run metadata instead of just the human answer.
+
+The handoff (a serialized snapshot of this session) is attached automatically from the transcript stash the plugin hooks maintain. If no transcript was stashed, the run warns `Handoff: empty` — the participant saw none of this session.
+
+Artifacts land in the workspace's run dir under `~/.consensflow/workspaces/…` (`packet.md`, `stdout.txt`, `stderr.txt`, `result.json`, `transcript.md`) — never inside the project. `packet.md` is byte-for-byte what the participant received; `transcript.md` is the durable event-trail backstop.
 
 ## The two rules that matter most
 
@@ -51,7 +72,7 @@ Then wait for the user to approve.
 This gate covers BOTH cases equally:
 
 - **(a) Advice in a text response.** Do not implement, refactor toward, or commit to a participant's suggestion until the user approves it.
-- **(b) Real changes by a write-capable participant.** A `workspace-write` / `full-auto` participant may have edited files or run commands in the workspace. Do not treat that work as accepted: surface what changed (the run output includes a post-run change capture; summary + recommendation) and get approval before keeping, building on, or committing it. If the user rejects it, revert it.
+- **(b) Real changes by a write-capable participant.** A `workspace-write` / `full-auto` participant may have edited files or run commands in the workspace. Do not treat that work as accepted: inspect what changed yourself (for example `git status` / `git diff` in the relevant repo), then surface a summary + recommendation and get approval before keeping, building on, or committing it. If the user rejects it, revert it.
 
 **The only exception:** the user has already explicitly told the lead to proceed — e.g. "get Zeus's take and apply what makes sense," or "run the builder and commit it." Pre-authorization scoped to that request stands in for the approval; do not re-ask. Absent such an instruction, never act on a participant's output on your own.
 
@@ -85,6 +106,33 @@ Presets (all read-only; the same model+effort family exists on every engine that
 - **Image**: `@pygmalion` (kind=image) generates a picture with gpt-image-2 via the Codex CLI login (`codex login`) — prompt-only (no handoff), PNG saved as `image.png` in the run dir; open it with the Read tool to view or show it.
 
 Model and effort strings pass through to the engine verbatim, so any identifier the engine accepts works.
+
+## Full command reference for the lead
+
+Use the CLI directly from Bash:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" status
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" doctor
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants list
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants presets
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add <preset> [--name <name>] [--cwd <subdir>] [--timeoutMs <ms>]
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add all
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>|--thinking <t>] [--tools readonly|workspace-write|full-auto] [--cwd <subdir>]
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants show @name
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants remove @name
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @name <prompt> [--stream] [--rw|--tools <policy>] [--prompt-file <file>] [--context <note>] [--no-handoff] [--timeout-ms <ms>] [--json]
+```
+
+User-facing slash commands are thin wrappers around that CLI: `/consensflow:cf`, `/consensflow:status`, `/consensflow:doctor`, `/consensflow:presets`, and `/consensflow:participants …`.
+
+## Read-only vs write-capable participants
+
+- **Default and presets:** read-only. Do not add `--tools`, or use `--tools readonly` explicitly.
+- **Stored write-capable participant:** create/update with `--tools workspace-write` (or `full-auto`) when the participant is meant to edit by default.
+- **Per-call write access:** prefer `--rw` or `--tools workspace-write` on a single `run` when you only need one write-capable call. This keeps one roster entry and makes the escalation obvious in the command history.
+- **Force read-only for one call:** use `--tools readonly`, even if the stored participant is write-capable.
+- **After any write-capable run:** run your own inspection (`git status`, `git diff`, relevant tests as needed), summarize what the participant changed, give your recommendation, and wait for user approval before keeping/building on/committing the changes unless the user pre-authorized that exact action.
 
 ## How the user asks
 
