@@ -412,6 +412,16 @@ test("e2e: --stream renders live event lines; without it, just the clean final a
     const shimPath = path.join(bin, "opencode");
     await writeFile(shimPath, shim, "utf8");
     await chmod(shimPath, 0o755);
+    // A fake pi that reports its final answer only in agent_end. The stream adapter intentionally
+    // skips agent_end to avoid duplicate message_end text, so the CLI must print the parsed final
+    // result after --stream when no answer text streamed.
+    const piShim = [
+      "#!/usr/bin/env node",
+      `console.log(JSON.stringify({ type: "agent_end", messages: [{ role: "assistant", content: [{ type: "text", text: "PI FALLBACK FINAL" }] }] }));`,
+    ].join("\n");
+    const piShimPath = path.join(bin, "pi");
+    await writeFile(piShimPath, piShim, "utf8");
+    await chmod(piShimPath, 0o755);
     const ctx = { ws, dir, fake: { bin, out: dir } };
     await runCf(["participants", "add", "luna"], ctx);
 
@@ -424,6 +434,10 @@ test("e2e: --stream renders live event lines; without it, just the clean final a
     const plain = await runCf(["run", "@luna", "go"], ctx);
     assert.match(plain.stdout, /the streamed answer/, "the clean final answer");
     assert.doesNotMatch(plain.stdout, /→ .*read|← .*read/, "no raw event lines without --stream");
+
+    assert.equal((await runCf(["participants", "add", "--name", "PiOnly", "--kind", "pi", "--model", "fake"], ctx)).exitCode, 0);
+    const fallback = await runCf(["run", "@pionly", "go", "--stream"], ctx);
+    assert.match(fallback.stdout, /PI FALLBACK FINAL/, "--stream still prints final output when no text event streamed");
   });
 });
 

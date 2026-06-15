@@ -236,8 +236,13 @@ async function handleRun(tokens, cwd) {
   // so the lead can relay the participant's thinking / tool calls / answer into this session
   // (foreground-incremental). Suppressed under --json
   // so the streamed lines can't corrupt the JSON payload.
+  let streamedAnswerText = false;
   const onEvent = parsed.flags.stream === true && parsed.flags.json !== true
-    ? (event) => { const line = renderEvent(event); if (line) process.stdout.write(`${line}\n`); }
+    ? (event) => {
+      if (event?.kind === "text" || event?.kind === "final") streamedAnswerText = true;
+      const line = renderEvent(event);
+      if (line) process.stdout.write(`${line}\n`);
+    }
     : undefined;
   const result = await runParticipant({ cwd, participant: effective, packet, kind: "ask", timeoutMs: parsed.flags["timeout-ms"], onEvent });
   result.handoffSummary = handoffSummary;
@@ -246,7 +251,17 @@ async function handleRun(tokens, cwd) {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
-  if (!onEvent) console.log(renderRunResult(result));   // --stream already showed the live trace
+  // --stream is the normal foreground path, but some engines report the final answer only in a
+  // terminal summary event that has no stream adapter. In that case, print the parsed final result
+  // too so a streamed participant can never appear to "not reply".
+  if (!onEvent || shouldPrintFinalAfterStream(result, streamedAnswerText)) console.log(renderRunResult(result));
+}
+
+function shouldPrintFinalAfterStream(result, streamedAnswerText) {
+  if (!streamedAnswerText) return true;
+  if (result.timedOut || result.exitCode !== 0) return true;
+  if (result.handoffSummary?.startsWith("empty")) return true;
+  return effectiveToolsPolicy(result.participant) !== "readonly";
 }
 
 // Image generation doesn't fit the text-CLI runner: it calls the Codex Responses backend
