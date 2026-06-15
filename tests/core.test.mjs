@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createPacket } from "../lib/packets.js";
 import { getPreset, listPresetIds, PARTICIPANT_PRESETS, participantFromPreset } from "../lib/presets.js";
 import { buildRunnerInvocation, codexSandbox, effectiveTimeoutMs, normalizeProcessOutput, runParticipant, spawnWithInput, toolsForPi } from "../lib/runners.js";
-import { getParticipant, loadParticipants, normalizeParticipant, removeParticipant, upsertParticipant } from "../lib/state.js";
+import { configRoot, getParticipant, loadParticipants, normalizeParticipant, participantsPath, removeParticipant, upsertParticipant } from "../lib/state.js";
 import { effectiveToolsPolicy, participantForKind } from "../lib/workflows.js";
 import { parseOptions, parseParticipantPrompt, resolveInside, slugify, tokenize } from "../lib/utils.js";
 
@@ -265,6 +265,35 @@ test("spawnWithInput survives a child that exits without reading stdin (EPIPE)",
   assert.equal(result.timedOut, false);
 });
 
+test("spawnWithInput streams complete stdout lines via onStdoutLine: carry across splits, CRLF-stripped, blanks skipped, newline-less tail flushed [STRM-03]", async () => {
+  await withTempDir(async (dir) => {
+    const fake = path.join(dir, "chunker.mjs");
+    // Emits the byte stream one env-provided chunk at a time, with a gap between writes so the
+    // partial-line carry path is actually exercised (the parent sees separate `data` events).
+    await writeFile(fake, [
+      "const chunks = JSON.parse(process.env.CHUNKS);",
+      "let i = 0;",
+      "const next = () => { if (i >= chunks.length) return; process.stdout.write(chunks[i++]); setTimeout(next, 30); };",
+      "next();",
+    ].join("\n"), "utf8");
+
+    // A whole line + the start of a second (carry), the rest of line 2 ending CRLF,
+    // a blank line (must be skipped), and a final line with NO trailing newline.
+    const chunks = ['{"n":1}\n{"par', 'tial":2}\r\n', "\n", '{"tail":3}'];
+    const lines = [];
+    const result = await spawnWithInput(process.execPath, [fake], {
+      timeoutMs: 10_000,
+      env: { CHUNKS: JSON.stringify(chunks) },
+      onStdoutLine: (line) => lines.push(line),
+    });
+
+    assert.deepEqual(lines, ['{"n":1}', '{"partial":2}', '{"tail":3}'], "complete lines, CRLF stripped, blank skipped, tail flushed");
+    assert.equal(result.stdout, chunks.join(""), "buffered stdout bytes are unchanged by the line callback");
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.timedOut, false);
+  });
+});
+
 test("effectiveTimeoutMs: per-call override wins over participant config, then the default", () => {
   assert.equal(effectiveTimeoutMs({ timeoutMs: 900000 }, 1234), 1234);
   assert.equal(effectiveTimeoutMs({ timeoutMs: 900000 }, undefined), 900000);
@@ -290,6 +319,64 @@ test("toolsPolicy alone gates write access; a missing policy fails safe to reado
   const p = normalizeParticipant({ name: "Y", kind: "codex" });
   assert.equal(p.toolsPolicy, "readonly");
   assert.throws(() => normalizeParticipant({ name: "X", kind: "codex", toolsPolicy: "bogus" }), /toolsPolicy must be one of/);
+});
+
+test("participantForKind honors an explicit per-call tools override (one participant, readonly or rw) [STRM-23]", () => {
+  const ro = { id: "ro", name: "RO", kind: "pi", toolsPolicy: "readonly" };
+  // No override → the stored default is kept.
+  assert.equal(participantForKind(ro, "ask").toolsPolicy, "readonly");
+  assert.equal(participantForKind(ro, "ask", undefined).toolsPolicy, "readonly");
+  assert.equal(participantForKind(ro, "ask", "").toolsPolicy, "readonly");
+  // A valid override wins over the stored policy — raising or lowering.
+  assert.equal(participantForKind(ro, "ask", "workspace-write").toolsPolicy, "workspace-write");
+  assert.equal(participantForKind(ro, "ask", "full-auto").toolsPolicy, "full-auto");
+  const rw = { id: "rw", name: "RW", kind: "codex", toolsPolicy: "workspace-write" };
+  assert.equal(participantForKind(rw, "ask", "readonly").toolsPolicy, "readonly");
+  // No stored policy + no override → readonly default preserved.
+  assert.equal(participantForKind({ id: "bare", name: "B", kind: "codex" }, "ask").toolsPolicy, "readonly");
+  // An invalid override throws (never silently grants/keeps the wrong capability).
+  assert.throws(() => participantForKind(ro, "ask", "bogus"), /tools/i);
+  // The stored participant object is never mutated by an override.
+  assert.equal(ro.toolsPolicy, "readonly");
+});
+
+test("participantsPath and artifact root live directly under the shared ConsensFlow home [STRM-27]", async () => {
+  await withTempDir(async (cwd) => {
+    const home = process.env.CONSENSFLOW_HOME;
+    assert.equal(configRoot(), home);
+    assert.equal(participantsPath(cwd), path.join(home, "participants.json"));
+    assert.ok(!participantsPath(cwd).includes("consensflow-cc") && !participantsPath(cwd).includes("consensflow-pi"), "roster not under a per-tool subdir");
+
+    await upsertParticipant(cwd, { name: "Shared", kind: "codex", model: "gpt-5.5" });
+    assert.equal(JSON.parse(await readFile(path.join(home, "participants.json"), "utf8")).participants.length, 1);
+    assert.equal((await getParticipant(cwd, "@shared")).model, "gpt-5.5");
+  });
+});
+
+test("legacy per-tool participant files are not read; the shared root file is the only config [STRM-27]", async () => {
+  await withTempDir(async (cwd) => {
+    const home = process.env.CONSENSFLOW_HOME;
+    await mkdir(path.join(home, "consensflow-pi"), { recursive: true });
+    await writeFile(
+      path.join(home, "consensflow-pi", "participants.json"),
+      JSON.stringify({ schemaVersion: 1, participants: [{ id: "pi-only", name: "Pi Only", kind: "pi", toolsPolicy: "readonly" }] }),
+      "utf8",
+    );
+    await mkdir(path.join(home, "consensflow-cc"), { recursive: true });
+    await writeFile(
+      path.join(home, "consensflow-cc", "participants.json"),
+      JSON.stringify({ schemaVersion: 1, participants: [{ id: "cc-only", name: "CC Only", kind: "claude-code", toolsPolicy: "readonly" }] }),
+      "utf8",
+    );
+
+    assert.equal(await getParticipant(cwd, "@pi-only"), null);
+    assert.equal(await getParticipant(cwd, "@cc-only"), null);
+    assert.deepEqual(await loadParticipants(cwd), []);
+
+    await upsertParticipant(cwd, { name: "Root Only", kind: "opencode", model: "openrouter/test" });
+    assert.deepEqual((await loadParticipants(cwd)).map((p) => p.id), ["root-only"]);
+    assert.equal((await getParticipant(cwd, "@root-only")).model, "openrouter/test");
+  });
 });
 
 test("runParticipant rejects participant cwd that escapes workspace before spawning", async () => {
@@ -350,13 +437,37 @@ test("normalizeProcessOutput parses Pi JSON mode from a truncated tail", () => {
   assert.equal(out.output, "TAIL FINAL");
 });
 
-test("normalizeProcessOutput parses OpenCode JSON text events", () => {
-  const stdout = [
-    JSON.stringify({ type: "step", part: { text: "working" } }),
-    JSON.stringify({ text: "OPENCODE FINAL" }),
+// [STRM-01] OpenCode answer text rides in `part.text` on `type:"text"` events (never a
+// top-level `{text}` — that shape was a fiction; the real captured fixture disproves it).
+// The blank-output bug returned only the LAST text part, which on a timed-out run is a
+// trailing whitespace fragment. The fix concatenates all text parts in order and falls
+// back to a short placeholder (OPENCODE_NO_ANSWER) — never the raw JSONL stream.
+test("normalizeProcessOutput: OpenCode concats ordered text parts, never the trailing fragment or raw JSONL [STRM-01]", async () => {
+  // (1) Real captured timeout fixture: the bug returned the trailing " " fragment and
+  // discarded the substantive first text part.
+  const fixture = await readFile(new URL("./fixtures/opencode-timeout.sample.jsonl", import.meta.url), "utf8");
+  const real = normalizeProcessOutput("opencode", fixture, "").output;
+  assert.match(real, /continue from where the lead left off/, "keeps the substantive text part");
+  assert.ok(real.trim().length > 1, "not the bare ' ' trailing fragment");
+  assert.doesNotMatch(real, /"type":\s*"step_start"|sessionID/, "never the raw JSONL stream as the answer");
+
+  // (2) All-empty / whitespace-only text parts → a short clean placeholder, never the raw stream.
+  const emptyStream = [
+    JSON.stringify({ type: "text", part: { text: "" } }),
+    JSON.stringify({ type: "text", part: { text: "   " } }),
+    JSON.stringify({ type: "step_finish", part: { type: "step-finish" } }),
   ].join("\n");
-  const out = normalizeProcessOutput("opencode", stdout, "");
-  assert.equal(out.output, "OPENCODE FINAL");
+  const empty = normalizeProcessOutput("opencode", emptyStream, "").output;
+  assert.ok(empty.trim().length > 0 && empty.length < 200, "short clean placeholder, not empty/whitespace");
+  assert.doesNotMatch(empty, /"type"|sessionID|step_finish/, "placeholder is not the raw JSONL");
+
+  // (3) Multiple real-shaped text parts concatenate in order; interleaved tool events are ignored.
+  const multi = [
+    JSON.stringify({ type: "text", part: { text: "Hello " } }),
+    JSON.stringify({ type: "tool_use", part: { type: "tool", tool: "read" } }),
+    JSON.stringify({ type: "text", part: { text: "world" } }),
+  ].join("\n");
+  assert.equal(normalizeProcessOutput("opencode", multi, "").output, "Hello world");
 });
 
 test("participantFromPreset can rename while keeping the backend", () => {
@@ -428,7 +539,7 @@ test("upsertParticipant rejects a name slug that collides with another participa
 // (see AGENTS.md). A divergence means a fix landed in one project and silently missed the other.
 test("parity: shared lib files stay identical with the consensflow-pi sibling", async (t) => {
   const siblingLib = new URL("../../consensflow-pi/extensions/consensflow/lib/", import.meta.url);
-  for (const file of ["utils.js", "workflows.js"]) {
+  for (const file of ["utils.js", "workflows.js", "transcript-events.js"]) {
     let sibling;
     try {
       sibling = await readFile(new URL(file, siblingLib), "utf8");
@@ -439,5 +550,22 @@ test("parity: shared lib files stay identical with the consensflow-pi sibling", 
     const ours = await readFile(new URL(`../lib/${file}`, import.meta.url), "utf8");
     assert.equal(ours, sibling, `${file} diverged from consensflow-pi — change both or document the delta in both AGENTS.md files`);
   }
+});
+
+test("docs describe the stream-first observability surface, transcript backstop, and conventions [STRM-21]", async () => {
+  const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
+  const agents = await readFile(new URL("../AGENTS.md", import.meta.url), "utf8");
+  const docs = `${readme}\n${agents}`;
+  // Stream-first observability surface (primary), foreground-incremental.
+  assert.match(docs, /--stream/, "docs mention the --stream surface");
+  assert.match(docs, /foreground/i, "docs note --stream is foreground-incremental");
+  // Durability backstop + the new parity-locked event module.
+  assert.match(docs, /transcript\.md/, "docs mention the transcript.md backstop");
+  assert.match(docs, /transcript-events\.js/, "docs mention the parity-locked event module");
+  // The two config additions.
+  assert.match(docs, /--rw/, "docs mention the per-call --rw override");
+  assert.match(docs, /shared/i, "docs mention the shared cross-tool roster");
+  // The runners.js mirrored-with-deltas convention.
+  assert.match(agents, /mirror/i, "AGENTS.md documents the runners.js mirrored-with-deltas convention");
 });
 

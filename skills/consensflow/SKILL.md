@@ -21,7 +21,7 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" doctor        # which engine CLIs are in
 - Participants can take **minutes** (frontier models at high effort). Set a generous Bash timeout (600000 ms), or run in the background and poll.
 - `--context` adds a focused brief from you on top of the auto-included session handoff.
 - The handoff (a serialized snapshot of this session) is attached automatically from the transcript stash the plugin hooks maintain; `--no-handoff` skips it. The run prints just the participant's answer; if no transcript was stashed it warns `Handoff: empty` — the participant saw none of this session.
-- Artifacts land in the workspace's run dir under `~/.consensflow/consensflow-cc/workspaces/…` (`packet.md`, `stdout.txt`, `stderr.txt`, `result.json`) — never inside the project. `packet.md` is byte-for-byte what the participant received; use `--json` when you need the full run metadata inline.
+- Artifacts land in the workspace's run dir under `~/.consensflow/workspaces/…` (`packet.md`, `stdout.txt`, `stderr.txt`, `result.json`) — never inside the project. `packet.md` is byte-for-byte what the participant received; use `--json` when you need the full run metadata inline.
 
 ## The two rules that matter most
 
@@ -64,7 +64,7 @@ In short: ask freely, apply only with a green light.
 
 ## How participants are created
 
-Participants are configured globally under `~/.consensflow/consensflow-cc/participants.json` (set up once, use from any project; the Pi sibling keeps its own same-format roster under `~/.consensflow/consensflow-pi/`). They come from curated presets or fully custom definitions:
+Participants are configured in the shared roster `~/.consensflow/participants.json` (set up once, use from any project, Claude Code, and the Pi sibling). There are no per-tool config roots. Participants come from curated presets or fully custom definitions:
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants presets                    # list built-in presets

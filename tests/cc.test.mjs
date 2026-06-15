@@ -72,7 +72,7 @@ test("serializeClaudeTranscript labels tool results via the tool_use map and ski
 test("serializeClaudeTranscript keeps ConsensFlow run results near-whole (cross-pollination)", () => {
   const reply = "A".repeat(5000);
   const entries = [
-    assistantEntry([{ type: "tool_use", id: "t1", name: "Bash", input: { command: 'node "/plug/bin/cf.mjs" run @iris --prompt-file "/ws/.consensflow-cc/pending-prompt.md"' } }]),
+    assistantEntry([{ type: "tool_use", id: "t1", name: "Bash", input: { command: 'node "/plug/bin/cf.mjs" run @iris --prompt-file "/ws/.consensflow/pending-prompt.md"' } }]),
     userEntry([{ type: "tool_result", tool_use_id: "t1", content: reply }]),
     assistantEntry([{ type: "tool_use", id: "t2", name: "Read", input: { file_path: "a.ts" } }]),
     userEntry([{ type: "tool_result", tool_use_id: "t2", content: reply }]),
@@ -180,7 +180,7 @@ test("user-prompt hook routes a configured @mention to a run instruction with a 
     assert.match(context, /without the user's approval/);
     // The stash lives under the config home, keyed by workspace — never inside the project.
     const promptFile = context.match(/--prompt-file "([^"]+)"/)[1];
-    assert.equal(promptFile, path.join(dir, "home", "consensflow-cc", "workspaces", workspaceKey(dir), "pending-prompt.md"));
+    assert.equal(promptFile, path.join(dir, "home", "workspaces", workspaceKey(dir), "pending-prompt.md"));
     assert.equal(await readFile(promptFile, "utf8"), "what about the cache?");
   });
 });
@@ -234,10 +234,12 @@ test("hooks bail out silently inside participant subprocesses (CONSENSFLOW_CHILD
 // packet → parse → artifact path is exercised for all four engines.
 
 const SHIM_BODIES = {
-  claude: `console.log(JSON.stringify({ type: "result", result: "CLAUDE OK" }));`,
+  claude: `console.log(JSON.stringify({ type: "system", subtype: "init" }));
+console.log(JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "CLAUDE OK" }] } }));
+console.log(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "CLAUDE OK" }));`,
   codex: `console.log(JSON.stringify({ type: "thread.started", thread_id: "t" }));\nconsole.log(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "CODEX OK" } }));`,
   pi: `console.log(JSON.stringify({ type: "agent_end", messages: [{ role: "assistant", content: [{ type: "text", text: "PI OK" }] }] }));`,
-  opencode: `console.log(JSON.stringify({ text: "OPENCODE OK" }));`,
+  opencode: `console.log(JSON.stringify({ type: "text", part: { type: "text", text: "OPENCODE OK" } }));`,
 };
 
 async function makeFakeEngines(dir) {
@@ -294,7 +296,7 @@ async function runCf(args, { ws, dir, fake }, extraEnv = {}) {
 }
 
 async function latestPacket(ws, dir) {
-  const current = JSON.parse(await readFile(path.join(dir, "home", "consensflow-cc", "workspaces", workspaceKey(ws), "current.json"), "utf8"));
+  const current = JSON.parse(await readFile(path.join(dir, "home", "workspaces", workspaceKey(ws), "current.json"), "utf8"));
   return {
     current,
     packet: await readFile(path.join(current.latestRunDir, "packet.md"), "utf8"),
@@ -361,6 +363,116 @@ test("e2e: all four engines run, parse, and persist artifacts through the real s
     assert.equal(piDump.argv[piDump.argv.indexOf("--thinking") + 1], "xhigh");
     const opencode = JSON.parse(await readFile(path.join(fake.out, "opencode.json"), "utf8"));
     assert.deepEqual(JSON.parse(opencode.env.OPENCODE_PERMISSION), { edit: "deny", bash: "deny" });
+  });
+});
+
+test("e2e: a timed-out run renders the partial trail under a timed-out header, not an exit-0 failure [STRM-15]", async () => {
+  await withTempDir(async (dir) => {
+    const ws = path.join(dir, "ws");
+    await mkdir(ws, { recursive: true });
+    const bin = path.join(dir, "fakebin");
+    await mkdir(bin, { recursive: true });
+    // A fake opencode that emits a real-shaped tool_use + a text part, then HANGS until SIGTERM —
+    // forcing a timeout with partial output already captured.
+    const shim = [
+      "#!/usr/bin/env node",
+      `console.log(JSON.stringify({ type: "tool_use", part: { type: "tool", tool: "read", state: { input: { path: "x.txt" }, output: "file body" } } }));`,
+      `console.log(JSON.stringify({ type: "text", part: { text: "partial answer before the hang" } }));`,
+      "setInterval(() => {}, 1000);",
+    ].join("\n");
+    const shimPath = path.join(bin, "opencode");
+    await writeFile(shimPath, shim, "utf8");
+    await chmod(shimPath, 0o755);
+    const ctx = { ws, dir, fake: { bin, out: dir } };
+
+    await runCf(["participants", "add", "luna"], ctx);
+    const run = await runCf(["run", "@luna", "--timeout-ms", "1200", "summarize the file"], ctx);
+
+    assert.match(run.stdout, /timed out/i, "the run is marked as timed out");
+    assert.match(run.stdout, /partial answer before the hang/, "the partial answer is surfaced");
+    assert.match(run.stdout, /read/, "the tool call appears in the trail or partial output");
+    assert.doesNotMatch(run.stdout, /Run failed: exit 0/, "a timeout is not mislabeled as an exit-0 failure");
+  });
+});
+
+test("e2e: --stream renders live event lines; without it, just the clean final answer [STRM-17]", async () => {
+  await withTempDir(async (dir) => {
+    const ws = path.join(dir, "ws");
+    await mkdir(ws, { recursive: true });
+    const bin = path.join(dir, "fakebin");
+    await mkdir(bin, { recursive: true });
+    // A fake opencode that emits a real-shaped tool_use + text part, then exits cleanly.
+    const shim = [
+      "#!/usr/bin/env node",
+      `console.log(JSON.stringify({ type: "tool_use", part: { type: "tool", tool: "read", state: { input: { path: "f.txt" }, output: "body" } } }));`,
+      `console.log(JSON.stringify({ type: "text", part: { text: "the streamed answer" } }));`,
+    ].join("\n");
+    const shimPath = path.join(bin, "opencode");
+    await writeFile(shimPath, shim, "utf8");
+    await chmod(shimPath, 0o755);
+    const ctx = { ws, dir, fake: { bin, out: dir } };
+    await runCf(["participants", "add", "luna"], ctx);
+
+    // Boolean flags follow the --json convention: after the prompt (parseOptions otherwise
+    // consumes the next token as the flag's value).
+    const streamed = await runCf(["run", "@luna", "go", "--stream"], ctx);
+    assert.match(streamed.stdout, /→ .*read/, "the tool call is streamed live");
+    assert.match(streamed.stdout, /the streamed answer/, "the text is streamed live");
+
+    const plain = await runCf(["run", "@luna", "go"], ctx);
+    assert.match(plain.stdout, /the streamed answer/, "the clean final answer");
+    assert.doesNotMatch(plain.stdout, /→ .*read|← .*read/, "no raw event lines without --stream");
+  });
+});
+
+test("e2e: runParticipant writes a transcript.md backstop (event trail) and sets transcriptPath [STRM-19]", async () => {
+  await withTempDir(async (dir) => {
+    const ws = path.join(dir, "ws");
+    await mkdir(ws, { recursive: true });
+    const bin = path.join(dir, "fakebin");
+    await mkdir(bin, { recursive: true });
+    const shim = [
+      "#!/usr/bin/env node",
+      `console.log(JSON.stringify({ type: "tool_use", part: { type: "tool", tool: "read", state: { input: { path: "f.txt" }, output: "file body" } } }));`,
+      `console.log(JSON.stringify({ type: "text", part: { text: "the backstopped answer" } }));`,
+    ].join("\n");
+    const shimPath = path.join(bin, "opencode");
+    await writeFile(shimPath, shim, "utf8");
+    await chmod(shimPath, 0o755);
+    const ctx = { ws, dir, fake: { bin, out: dir } };
+    await runCf(["participants", "add", "luna"], ctx);
+
+    const run = await runCf(["run", "@luna", "go", "--json"], ctx);
+    const result = JSON.parse(run.stdout);
+    assert.ok(result.transcriptPath, "result.json carries transcriptPath");
+    const transcript = await readFile(result.transcriptPath, "utf8");
+    assert.ok(transcript.trim().length > 0, "transcript.md is non-empty");
+    assert.match(transcript, /read/, "transcript includes the tool call");
+    assert.match(transcript, /the backstopped answer/, "transcript includes the answer, in order");
+  });
+});
+
+test("e2e: --rw makes a read-only participant write-capable for one run; default stays readonly [STRM-25]", async () => {
+  await withTempDir(async (dir) => {
+    const ws = path.join(dir, "ws");
+    await mkdir(ws, { recursive: true });
+    const fake = await makeFakeEngines(dir);
+    const ctx = { ws, dir, fake };
+    await runCf(["participants", "add", "zeus"], ctx); // claude-code, stored readonly
+
+    // --rw: write capability reaches the engine for this run.
+    await runCf(["run", "@zeus", "go", "--rw"], ctx);
+    let claude = JSON.parse(await readFile(path.join(fake.out, "claude.json"), "utf8"));
+    const allowed = claude.argv[claude.argv.indexOf("--allowedTools") + 1];
+    assert.match(allowed, /Edit/, "--rw grants Edit to the engine");
+    assert.match(allowed, /Write/, "--rw grants Write to the engine");
+    assert.equal(claude.argv.includes("--disallowedTools"), false, "--rw drops the read-only deny list");
+
+    // A subsequent run WITHOUT --rw is read-only again — the override never persisted to the roster.
+    await runCf(["run", "@zeus", "go"], ctx);
+    claude = JSON.parse(await readFile(path.join(fake.out, "claude.json"), "utf8"));
+    assert.equal(claude.argv[claude.argv.indexOf("--allowedTools") + 1], "Read,Grep,Glob", "default run stays read-only");
+    assert.ok(claude.argv.includes("--disallowedTools"), "default run keeps the deny list");
   });
 });
 

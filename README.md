@@ -2,7 +2,7 @@
 
 Ask other AI coding agents — **Claude Code, Codex, Pi, OpenCode** — for a second opinion, **one at a time, by name**, without leaving your Claude Code session.
 
-This is the Claude Code-native sibling of [consensflow-pi](../consensflow-pi/): same presets, same packet/runner core, same safety model, same config format — packaged as a **Claude Code plugin** instead of a Pi extension. Each tool keeps its own roster under the shared config home (`~/.consensflow/consensflow-cc/` here, `~/.consensflow/consensflow-pi/` for pi).
+This is the Claude Code-native sibling of [consensflow-pi](../consensflow-pi/): same presets, same packet/runner core, same safety model, same config format — packaged as a **Claude Code plugin** instead of a Pi extension. Both tools share one participant roster at `~/.consensflow/participants.json`, so a participant defined in either is available in the other.
 
 ---
 
@@ -18,7 +18,7 @@ ConsensFlow lets you keep a roster of **participants**. A participant is just *o
 
 The whole idea in five bullets:
 
-- **Participant** = a named *(agent + model)* combo. Configure once, reuse from any project. The roster is per tool (`~/.consensflow/consensflow-cc/`), same file format as consensflow-pi's — copy entries between the two to share them.
+- **Participant** = a named *(agent + model)* combo. Configure once, reuse from any project. The roster is **shared across both tools** at `~/.consensflow/participants.json` — set it up once, use it from pi and cc.
 - **One at a time.** `@zeus @athena …` is rejected — ask one, read, then ask the next.
 - **Read-only by default.** A participant can look at your files but not change them, unless you explicitly make it write-capable.
 - **One-shot, but context-aware.** Each call is fresh (no memory of past calls), yet it always receives the current session handoff — *including earlier participants' answers* — so the 2nd agent you ask can build on the 1st.
@@ -34,7 +34,7 @@ The plugin's UserPromptSubmit hook sees exactly one configured @mention
    │   stashes the prompt body and injects the exact run command as context
    ▼
 Claude (the lead) executes via the Bash tool:
-   node ".../bin/cf.mjs" run @zeus --prompt-file "~/.consensflow/consensflow-cc/workspaces/<ws>/pending-prompt.md"
+   node ".../bin/cf.mjs" run @zeus --prompt-file "~/.consensflow/workspaces/<ws>/pending-prompt.md"
    ▼
 cf.mjs builds a "packet" for @zeus:
    • who @zeus is        (claude-code · claude-opus-4-8 · max)
@@ -44,7 +44,7 @@ cf.mjs builds a "packet" for @zeus:
    ▼
 Runs @zeus as an isolated, one-shot subprocess (read-only tools, no session persistence)
    ▼
-Saves artifacts:  ~/.consensflow/consensflow-cc/workspaces/<ws>/runs/<run-id>/{packet.md, stdout.txt, stderr.txt, result.json}
+Saves artifacts:  ~/.consensflow/workspaces/<ws>/runs/<run-id>/{packet.md, stdout.txt, stderr.txt, result.json}
    ▼
 Claude relays @zeus's answer — and never acts on it without your approval
 ```
@@ -84,7 +84,7 @@ claude plugin validate /path/to/consensflow-cc
 
 ### Step 1 — Configure participants
 
-Same presets as consensflow-pi (47 curated presets — every model+effort family on every engine that runs it, including the `@pygmalion` image preset; `/consensflow:presets` prints the full list):
+Same presets as consensflow-pi (48 curated presets — every model+effort family on every engine that runs it, including the `@pygmalion` image preset; `/consensflow:presets` prints the full list):
 
 ```text
 /consensflow:presets                         # see all presets
@@ -102,7 +102,7 @@ Or fully custom (any model string the engine accepts — values pass through ver
 
 > **Read-only vs write.** By default a participant can only read. For one that can actually edit files and run commands, pass `--tools workspace-write` (or `full-auto`) — write access is never implicit.
 
-Config lives in `~/.consensflow/consensflow-cc/participants.json` — per tool, same format as consensflow-pi's roster (`~/.consensflow/consensflow-pi/participants.json`); copy entries between the files to share a participant across both tools.
+Config lives in the **shared** roster `~/.consensflow/participants.json` — used by both consensflow-cc and consensflow-pi, so a participant added in one is immediately available in the other. There are no per-tool config roots.
 
 ### Step 2 — Ask
 
@@ -122,14 +122,17 @@ Participants don't get your git state automatically — when you want a diff rev
 The answer is relayed inline. Every run is saved under the ConsensFlow home — never inside your project:
 
 ```text
-~/.consensflow/consensflow-cc/workspaces/<workspace>-<hash>/runs/<run-id>/
+~/.consensflow/workspaces/<workspace>-<hash>/runs/<run-id>/
   packet.md      # exactly what the participant was sent
   stdout.txt     # raw engine output
   stderr.txt     # raw engine errors/progress
-  result.json    # parsed answer + metadata
+  result.json    # parsed answer + metadata (incl. transcriptPath)
+  transcript.md  # human-readable thinking / tool calls / answer — the durability backstop
 ```
 
-After a write-capable run, review what changed yourself (e.g. `git status` / `git diff` in your repo) before keeping it.
+**Watch it work live:** add `--stream` (`cf run @name <prompt> --stream`) to render the participant's thinking, tool calls, and answer to stdout as they arrive — foreground-incremental, so the lead relays them into the session. Without `--stream` you get just the clean final answer; either way the run writes `transcript.md` so a killed or backgrounded run isn't lost. On a timeout you get the partial trail under a clear header — never a raw event dump.
+
+After a write-capable run, review what changed yourself (e.g. `git status` / `git diff` in your repo) before keeping it. **Per-call write:** a participant is read-only by default; add `--rw` (or `--tools workspace-write`) to make it write-capable for one run — no second roster entry needed.
 
 ### The handoff — what a participant actually sees
 
@@ -179,7 +182,8 @@ cf status                        # participants + session stash + latest run
 cf doctor                        # which engine CLIs are installed
 cf participants presets|list|show @name|remove @name
 cf participants add <preset>|all|--name … --kind … --model …
-cf run @name <prompt> [--prompt-file f] [--context note] [--no-handoff] [--timeout-ms n] [--json]
+cf run @name <prompt> [--stream] [--rw | --tools <policy>] [--prompt-file f] [--context note] [--no-handoff] [--timeout-ms n] [--json]
+#   flags go AFTER the prompt; --stream streams events live, --rw makes this run write-capable
 ```
 
 ## Safety model
@@ -199,7 +203,7 @@ cf run @name <prompt> [--prompt-file f] [--context note] [--no-handoff] [--timeo
 | Handoff source | `ctx.sessionManager.getBranch()` | session transcript JSONL, stashed by hooks into the workspace's `session.json` under the ConsensFlow home |
 | Per-participant `/name` commands | yes (registered at load) | no — use `@name` or `/consensflow:cf` |
 | Image participants (`@pygmalion`) | yes (Pi's openai-codex login) | yes (the Codex CLI's login, `~/.codex/auth.json`) |
-| Participant roster | `~/.consensflow/consensflow-pi/` | `~/.consensflow/consensflow-cc/` (same format — copy entries to share) |
+| Participant roster | `~/.consensflow/participants.json` (shared with cc) | `~/.consensflow/participants.json` (shared with pi) |
 | Everything else (presets, packet, runners, policies, artifacts) | identical | identical |
 
 ## Develop / test

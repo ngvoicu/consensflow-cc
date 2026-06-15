@@ -8,12 +8,13 @@ import { generateImage, IMAGE_BACKEND, IMAGE_TRIGGER_DEFAULT, saveImagePng } fro
 import { formatPresets, getPreset, listPresetIds, participantFromPreset } from "../lib/presets.js";
 import {
   cfRoot,
-  configRoot,
+  configHome,
   ensureCfDirs,
   getParticipant,
   loadCurrent,
   loadParticipants,
   loadSession,
+  participantsPath,
   recordLatestRun,
   removeParticipant,
   runsRoot,
@@ -22,6 +23,7 @@ import {
 import { collectHandoff } from "../lib/transcript.js";
 import { createId, parseOptions, slugify } from "../lib/utils.js";
 import { effectiveTimeoutMs, runParticipant, spawnWithInput } from "../lib/runners.js";
+import { renderEvent } from "../lib/transcript-events.js";
 import { createPacket } from "../lib/packets.js";
 import { effectiveToolsPolicy, participantForKind } from "../lib/workflows.js";
 
@@ -58,13 +60,14 @@ async function handleStatus(cwd) {
     [
       "# ConsensFlow status",
       "",
-      `Config root: ${configRoot()}`,
+      `ConsensFlow home: ${configHome()}`,
+      `Participants file: ${participantsPath(cwd)}`,
       `Artifact root for this workspace: ${cfRoot(cwd)}`,
       `Session stash: ${session.transcriptPath ? `transcript tracked (${session.transcriptPath})` : "no transcript tracked yet — handoffs will be empty until the plugin hooks run"}`,
       `Participants: ${participants.length}`,
       `Latest run: ${current.latestRunId ?? "none"}`,
       "",
-      formatParticipants(participants),
+      formatParticipants(participants, cwd),
     ].join("\n"),
   );
 }
@@ -88,7 +91,8 @@ async function handleDoctor(cwd) {
   const lines = [
     "# ConsensFlow doctor",
     "",
-    `Config root: ${configRoot()}`,
+    `ConsensFlow home: ${configHome()}`,
+    `Participants file: ${participantsPath(cwd)}`,
     "",
     ...rows.map((row) => {
       const need = row.neededBy.length > 0 ? ` — needed by ${row.neededBy.join(", ")}` : " — not used by any participant";
@@ -109,7 +113,7 @@ async function handleParticipants(tokens, cwd) {
   await ensureCfDirs(cwd);
   const sub = tokens.shift() ?? "list";
   if (sub === "list") {
-    console.log(formatParticipants(await loadParticipants(cwd)));
+    console.log(formatParticipants(await loadParticipants(cwd), cwd));
     return;
   }
   if (sub === "presets" || sub === "preset") {
@@ -144,7 +148,7 @@ async function handleParticipants(tokens, cwd) {
       for (const presetId of listPresetIds()) {
         participants.push(await upsertParticipant(cwd, participantFromPreset(presetId, presetOverrides(parsed.flags))));
       }
-      console.log(`Saved ${participants.length} presets in ${configRoot()}.\n\n${participants.map(formatParticipantLine).join("\n")}`);
+      console.log(`Saved ${participants.length} presets in ${participantsPath(cwd)}.\n\n${participants.map(formatParticipantLine).join("\n")}`);
       return;
     }
 
@@ -153,7 +157,7 @@ async function handleParticipants(tokens, cwd) {
       assertAllowedFlags(parsed.flags, PRESET_OVERRIDE_FLAGS, "preset add");
       const participant = await upsertParticipant(cwd, participantFromPreset(presetRef, presetOverrides(parsed.flags)));
       const from = participant.preset && participant.preset !== participant.id ? ` from preset \`${participant.preset}\`` : "";
-      console.log(`Saved participant @${participant.id}${from} in ${configRoot()}.\n\n${formatParticipantLine(participant)}`);
+      console.log(`Saved participant @${participant.id}${from} in ${participantsPath(cwd)}.\n\n${formatParticipantLine(participant)}`);
       return;
     }
 
@@ -163,7 +167,7 @@ async function handleParticipants(tokens, cwd) {
       const name = stringFlag(parsed.flags.name) ?? presetRef;
       if (!name) throw new Error("Custom participant needs a name: /consensflow:participants add --name <name> --kind <kind> --model <model> ...");
       const participant = await upsertParticipant(cwd, customParticipantInput(name, parsed.flags));
-      console.log(`Saved custom participant @${participant.id} in ${configRoot()}.\n\n${formatParticipantLine(participant)}`);
+      console.log(`Saved custom participant @${participant.id} in ${participantsPath(cwd)}.\n\n${formatParticipantLine(participant)}`);
       return;
     }
 
@@ -222,16 +226,27 @@ async function handleRun(tokens, cwd) {
       : "empty — no session transcript stashed for this workspace (are the plugin hooks running?)";
   }
 
-  const effective = participantForKind(participant, "ask");
+  // Per-call tools override: `--rw` is shorthand for workspace-write, or `--tools <policy>` for an
+  // exact policy. The stored policy is the default; an explicit flag makes this one run write-capable
+  // (or read-only) without a second roster entry. An invalid --tools value throws (validated downstream).
+  const toolsOverride = parsed.flags.rw === true ? "workspace-write" : stringFlag(parsed.flags.tools);
+  const effective = participantForKind(participant, "ask", toolsOverride);
   const packet = await createPacket({ cwd, participant: effective, kind: "ask", task: prompt, extraContext: stringFlag(parsed.flags.context), handoff });
-  const result = await runParticipant({ cwd, participant: effective, packet, kind: "ask", timeoutMs: parsed.flags["timeout-ms"] });
+  // PRIMARY observability path: with --stream, render normalized events to stdout as they arrive,
+  // so the lead can relay the participant's thinking / tool calls / answer into this session
+  // (foreground-incremental; a backgrounded run surfaces on completion). Suppressed under --json
+  // so the streamed lines can't corrupt the JSON payload.
+  const onEvent = parsed.flags.stream === true && parsed.flags.json !== true
+    ? (event) => { const line = renderEvent(event); if (line) process.stdout.write(`${line}\n`); }
+    : undefined;
+  const result = await runParticipant({ cwd, participant: effective, packet, kind: "ask", timeoutMs: parsed.flags["timeout-ms"], onEvent });
   result.handoffSummary = handoffSummary;
 
   if (parsed.flags.json === true) {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
-  console.log(renderRunResult(result));
+  if (!onEvent) console.log(renderRunResult(result));   // --stream already showed the live trace
 }
 
 // Image generation doesn't fit the text-CLI runner: it calls the Codex Responses backend
@@ -342,12 +357,12 @@ function addUsage() {
   ].join("\n");
 }
 
-function formatParticipants(participants) {
+function formatParticipants(participants, cwd = process.cwd()) {
   if (participants.length === 0) {
     return [
       "# ConsensFlow participants",
       "",
-      `Config root: ${configRoot()}`,
+      `Participants file: ${participantsPath(cwd)}`,
       "",
       "No participants configured yet.",
       "",
@@ -361,7 +376,7 @@ function formatParticipants(participants) {
       "```",
     ].join("\n");
   }
-  return ["# ConsensFlow participants", "", `Config root: ${configRoot()}`, "", ...participants.map(formatParticipantLine)].join("\n");
+  return ["# ConsensFlow participants", "", `Participants file: ${participantsPath(cwd)}`, "", ...participants.map(formatParticipantLine)].join("\n");
 }
 
 function formatParticipantLine(p) {
@@ -381,8 +396,12 @@ function formatParticipantLine(p) {
 function renderRunResult(result) {
   const writeCapable = effectiveToolsPolicy(result.participant) !== "readonly";
   const lines = [`# @${result.participant.id}`];
-  if (result.exitCode !== 0 || result.timedOut) {
-    lines.push("", `Run failed: exit ${result.exitCode}${result.timedOut ? " (timed out)" : ""} — artifacts: ${result.runDir}`);
+  if (result.timedOut) {
+    // A timeout is not a failure with a meaningful exit code — the partial trail below is the
+    // real signal. Don't print "exit 0", which reads as success.
+    lines.push("", `(timed out — partial output below; artifacts: ${result.runDir})`);
+  } else if (result.exitCode !== 0) {
+    lines.push("", `Run failed: exit ${result.exitCode} — artifacts: ${result.runDir}`);
   }
   if (result.handoffSummary?.startsWith("empty")) lines.push("", `Handoff: ${result.handoffSummary}`);
   if (writeCapable) lines.push("", "> Write-capable run: this participant could edit files and run commands. Inspect what changed in the workspace (e.g. `git status` / `git diff` in a repo) and review it before keeping or building on it.");
@@ -403,8 +422,7 @@ Ask a participant:
 /consensflow:cf @zeus What do you think?           # explicit slash command
 \`\`\`
 
-Manage participants (config is global per tool, ${configRoot()}/participants.json — same format
-as consensflow-pi's roster, copy entries to share):
+Manage participants (shared across Claude Code and Pi, ${participantsPath(process.cwd())}):
 
 \`\`\`text
 /consensflow:presets                                    # list the curated presets
