@@ -188,7 +188,7 @@ async function handleRun(tokens, cwd) {
     throw new Error("Nested ConsensFlow runs are disabled inside participant subprocesses.");
   }
   await ensureCfDirs(cwd);
-  const parsed = parseOptions(tokens);
+  const parsed = parseRunOptions(tokens);
   const positional = [...parsed.positional];
   const ref = positional.shift();
   if (!ref || !ref.startsWith("@")) {
@@ -234,34 +234,62 @@ async function handleRun(tokens, cwd) {
   const packet = await createPacket({ cwd, participant: effective, kind: "ask", task: prompt, extraContext: stringFlag(parsed.flags.context), handoff });
   // PRIMARY observability path: with --stream, render normalized events to stdout as they arrive,
   // so the lead can relay the participant's thinking / tool calls / answer into this session
-  // (foreground-incremental). Suppressed under --json
-  // so the streamed lines can't corrupt the JSON payload.
-  let streamedAnswerText = false;
+  // (foreground-incremental). Suppressed under --json so streamed lines can't corrupt JSON.
   const onEvent = parsed.flags.stream === true && parsed.flags.json !== true
     ? (event) => {
-      if (event?.kind === "text" || event?.kind === "final") streamedAnswerText = true;
       const line = renderEvent(event);
       if (line) process.stdout.write(`${line}\n`);
     }
     : undefined;
-  const result = await runParticipant({ cwd, participant: effective, packet, kind: "ask", timeoutMs: parsed.flags["timeout-ms"], onEvent });
+  const result = await runParticipant({ cwd, participant: effective, packet, kind: "ask", timeoutMs: parsed.flags["timeout-ms"] ?? parsed.flags.timeoutMs, onEvent });
   result.handoffSummary = handoffSummary;
 
   if (parsed.flags.json === true) {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
-  // --stream is the normal foreground path, but some engines report the final answer only in a
-  // terminal summary event that has no stream adapter. In that case, print the parsed final result
-  // too so a streamed participant can never appear to "not reply".
-  if (!onEvent || shouldPrintFinalAfterStream(result, streamedAnswerText)) console.log(renderRunResult(result));
+  // Always print the parsed final result after the child exits, even with --stream. A backgrounded
+  // Bash run may only be inspected after completion, and some engine streams omit answer text until
+  // the terminal summary. This mirrors Pi: live crumbs are best-effort; the final reply is durable.
+  console.log(renderRunResult(result));
 }
 
-function shouldPrintFinalAfterStream(result, streamedAnswerText) {
-  if (!streamedAnswerText) return true;
-  if (result.timedOut || result.exitCode !== 0) return true;
-  if (result.handoffSummary?.startsWith("empty")) return true;
-  return effectiveToolsPolicy(result.participant) !== "readonly";
+function parseRunOptions(tokens) {
+  const positional = [];
+  const flags = {};
+  const valueFlags = new Set(["tools", "toolsPolicy", "context", "timeout-ms", "timeoutMs", "prompt", "prompt-file", "handoff-file"]);
+  const booleanFlags = new Set(["stream", "json", "rw", "handoff", "no-handoff"]);
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (!token.startsWith("--") || token === "--") {
+      positional.push(token);
+      continue;
+    }
+    const raw = token.slice(2);
+    const eq = raw.indexOf("=");
+    const name = eq >= 0 ? raw.slice(0, eq) : raw;
+    if (eq >= 0) {
+      if (valueFlags.has(name)) flags[name] = raw.slice(eq + 1);
+      else if (booleanFlags.has(name)) flags[name] = raw.slice(eq + 1) !== "false";
+      else positional.push(token);
+      continue;
+    }
+    if (booleanFlags.has(name)) {
+      flags[name] = true;
+      continue;
+    }
+    if (valueFlags.has(name)) {
+      const next = tokens[i + 1];
+      if (next === undefined || next.startsWith("--")) throw new Error(`--${name} requires a value`);
+      flags[name] = next;
+      i += 1;
+      continue;
+    }
+    // Unknown --flags are treated as prompt text, so pasted commands like `git diff --stat` are
+    // not stripped from the participant task.
+    positional.push(token);
+  }
+  return { positional, flags };
 }
 
 // Image generation doesn't fit the text-CLI runner: it calls the Codex Responses backend

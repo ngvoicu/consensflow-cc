@@ -29,7 +29,7 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "Review the auth flow" --conte
 # Use a prompt file when the hook stashes a user @mention, or when the prompt is large
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus --prompt-file question.md
 
-# Stream normalized thinking / tool / answer events live; without --stream the CLI prints only the final answer
+# Stream normalized thinking / tool / answer events live; the parsed final answer is printed at the end too
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "Review this diff" --stream
 
 # Per-call write access: use only when explicitly needed; the approval gate still applies afterward
@@ -37,11 +37,11 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @builder "Make the minimal fix" --rw
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @builder "Make the minimal fix" --tools workspace-write
 ```
 
-Important run flags (place flags **after** the prompt/ref; `--prompt-file` may stand in for the prompt):
+Important run flags (flags may appear before or after the prompt/ref; `--prompt-file` may stand in for the prompt):
 
 - `--context <note>` — focused lead brief in addition to the auto-included handoff.
 - `--no-handoff` — skip the session handoff.
-- `--stream` — render live normalized events as the child works. Use this for normal foreground participant runs unless the user asked for JSON/background behavior.
+- `--stream` — render live normalized events as the child works, then print the parsed final answer again after the child exits. Use this for normal foreground participant runs unless the user asked for JSON-only behavior; it is also safer for backgrounded Bash runs because the final reply remains at the tail of stdout.
 - `--rw` — shorthand for `--tools workspace-write` for this run only.
 - `--tools workspace-write|full-auto` — per-call write override; does not mutate the roster.
 - `--timeout-ms <ms>` — per-call timeout override.

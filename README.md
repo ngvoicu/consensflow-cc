@@ -131,7 +131,7 @@ The answer is relayed inline. Every run is saved under the ConsensFlow home — 
   transcript.md  # human-readable thinking / tool calls / answer — the durability backstop
 ```
 
-**Watch it work live:** routed `@name` prompts use `--stream` so the participant's thinking, tool calls, and answer render to stdout as they arrive; explicit `/consensflow:cf` participant runs should do the same. If you invoke the CLI manually, add `--stream` (`cf run @name <prompt> --stream`). Without `--stream` you get just the clean final answer; either way the run writes `transcript.md` as a durability backstop. On a timeout you get the partial trail under a clear header — never a raw event dump.
+**Watch it work live:** routed `@name` prompts use `--stream` so the participant's thinking, tool calls, and answer render to stdout as they arrive; explicit `/consensflow:cf` participant runs should do the same. If you invoke the CLI manually, add `--stream` (`cf run @name <prompt> --stream`). The parsed final answer is always printed after the child exits too, so foreground and background runs both end with a durable reply section. Without `--stream` you get just the clean final answer; either way the run writes `transcript.md` as a durability backstop. On a timeout you get the partial trail under a clear header — never a raw event dump.
 
 After a write-capable run, review what changed yourself (e.g. `git status` / `git diff` in your repo) before keeping it. **Per-call write:** add `--rw` (or `--tools workspace-write`) to make only that run write-capable — no second roster entry needed.
 
@@ -184,7 +184,7 @@ cf doctor                        # which engine CLIs are installed
 cf participants presets|list|show @name|remove @name
 cf participants add <preset>|all|--name … --kind … --model …
 cf run @name <prompt> [--stream] [--rw | --tools workspace-write|full-auto] [--prompt-file f] [--context note] [--no-handoff] [--timeout-ms n] [--json]
-#   flags go AFTER the prompt; --stream streams events live, --rw makes this run write-capable
+#   flags may go before or after the prompt; --stream streams events live, --rw makes this run write-capable
 ```
 
 ## Safety model

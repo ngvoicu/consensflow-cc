@@ -425,11 +425,13 @@ test("e2e: --stream renders live event lines; without it, just the clean final a
     const ctx = { ws, dir, fake: { bin, out: dir } };
     await runCf(["participants", "add", "luna"], ctx);
 
-    // Boolean flags follow the --json convention: after the prompt (parseOptions otherwise
-    // consumes the next token as the flag's value).
-    const streamed = await runCf(["run", "@luna", "go", "--stream"], ctx);
+    // --stream can appear before or after the prompt, and the parsed final reply is always printed
+    // after the child exits so a backgrounded Bash run still has a durable answer section.
+    const streamed = await runCf(["run", "@luna", "--stream", "go", "check", "git", "diff", "--stat"], ctx);
     assert.match(streamed.stdout, /→ .*read/, "the tool call is streamed live");
     assert.match(streamed.stdout, /the streamed answer/, "the text is streamed live");
+    assert.match(streamed.stdout, /# @luna/, "the final answer section is printed after the stream");
+    assert.match((await latestPacket(ws, dir)).packet, /go check git diff --stat/, "unknown prompt flags are preserved");
 
     const plain = await runCf(["run", "@luna", "go"], ctx);
     assert.match(plain.stdout, /the streamed answer/, "the clean final answer");
