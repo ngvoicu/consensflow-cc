@@ -248,9 +248,9 @@ async function handleRun(tokens, cwd) {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
-  // Always print the parsed final result after the child exits, even with --stream. A backgrounded
-  // Bash run may only be inspected after completion, and some engine streams omit answer text until
-  // the terminal summary. This mirrors Pi: live crumbs are best-effort; the final reply is durable.
+  // Always print the parsed final result after the child exits, even with --stream. Some engine
+  // streams omit answer text until the terminal summary. This mirrors Pi: live crumbs are
+  // best-effort; the final reply is durable.
   console.log(renderRunResult(result));
 }
 

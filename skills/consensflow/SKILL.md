@@ -41,7 +41,7 @@ Important run flags (flags may appear before or after the prompt/ref; `--prompt-
 
 - `--context <note>` — focused lead brief in addition to the auto-included handoff.
 - `--no-handoff` — skip the session handoff.
-- `--stream` — render live normalized events as the child works, then print the parsed final answer again after the child exits. Use this for normal foreground participant runs unless the user asked for JSON-only behavior; it is also safer for backgrounded Bash runs because the final reply remains at the tail of stdout.
+- `--stream` — render live normalized events as the child works, then print the parsed final answer again after the child exits. **Always pass it, in the foreground, for participant runs** — never drop it, detach the run, or substitute `--json` to hide the trail. The only exception is an explicit user request for JSON output.
 - `--rw` — shorthand for `--tools workspace-write` for this run only.
 - `--tools workspace-write|full-auto` — per-call write override; does not mutate the roster.
 - `--timeout-ms <ms>` — per-call timeout override.
@@ -150,7 +150,7 @@ When the user's prompt addresses one configured participant — `@zeus What's th
 - **One at a time.** Send to exactly one participant per call. Never fan out to several participants automatically. If the user names several, ask which one first, or ask one and wait for its answer before asking the next.
 - **Safe by default, not review-only.** A participant runs without write tools unless it was explicitly configured with `--tools workspace-write` or `full-auto`, or that call passes `--rw` / `--tools workspace-write`.
 - **One-shot, no memory.** Each call is fresh. Continuity comes only from the handoff (re-sent each time), which already includes earlier participant replies — so a later participant can build on an earlier one (cross-pollination). For a genuinely *independent* opinion, ask that participant **first**, before others have replied — otherwise its handoff carries the prior answers and colors it.
-- **No live/shared transcript.** Participants get a one-shot serialized handoff, not a streamed or shared session. There is no shared room.
+- **Foreground streaming is non-optional.** Every routed participant run passes `--stream` and stays in the foreground; the lead must not background/detach it, swap it for `--json`, or summarize the streamed trail away. The one exception is an explicit user request for JSON output.
 - **The lead is always the decision-maker.** ConsensFlow routes a prompt and returns an answer; it never implements anything on its own. Acting on any answer goes through the gate above.
 - **No automatic git context.** Participants receive only the handoff and the prompt — paste a diff or name the files when you want them assessed or changed.
 - **No hidden workflows.** Do not assume ceremonies like spec review, implementation review, council, grill, or handoff-by-name. The skill routes one prompt to one participant; that is all.

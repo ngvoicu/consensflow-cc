@@ -179,6 +179,8 @@ test("user-prompt hook routes a configured @mention to a run instruction with a 
     assert.match(context, /run @zeus --prompt-file/);
     assert.match(context, /--stream/);
     assert.match(context, /foreground/);
+    assert.doesNotMatch(context, /background/i);
+    assert.match(context, /never drop --stream/i);
     assert.match(context, /without the user's approval/);
     // The stash lives under the config home, keyed by workspace — never inside the project.
     const promptFile = context.match(/--prompt-file "([^"]+)"/)[1];
@@ -426,7 +428,7 @@ test("e2e: --stream renders live event lines; without it, just the clean final a
     await runCf(["participants", "add", "luna"], ctx);
 
     // --stream can appear before or after the prompt, and the parsed final reply is always printed
-    // after the child exits so a backgrounded Bash run still has a durable answer section.
+    // after the child exits so foreground runs have a durable answer section.
     const streamed = await runCf(["run", "@luna", "--stream", "go", "check", "git", "diff", "--stat"], ctx);
     assert.match(streamed.stdout, /→ .*read/, "the tool call is streamed live");
     assert.match(streamed.stdout, /the streamed answer/, "the text is streamed live");

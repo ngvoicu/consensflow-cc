@@ -570,6 +570,8 @@ test("docs describe the stream-first observability surface, transcript backstop,
   // Stream-first observability surface (primary), foreground-incremental.
   assert.match(docs, /--stream/, "docs mention the --stream surface");
   assert.match(docs, /foreground/i, "docs note --stream is foreground-incremental");
+  assert.doesNotMatch(docs, /background/i, "docs do not preserve background-run guidance");
+  assert.match(docs, /non-optional/i, "docs lock foreground streaming as non-optional");
   // Durability backstop + the new parity-locked event module.
   assert.match(docs, /transcript\.md/, "docs mention the transcript.md backstop");
   assert.match(docs, /transcript-events\.js/, "docs mention the parity-locked event module");
@@ -579,4 +581,3 @@ test("docs describe the stream-first observability surface, transcript backstop,
   // The runners.js mirrored-with-deltas convention.
   assert.match(agents, /mirror/i, "AGENTS.md documents the runners.js mirrored-with-deltas convention");
 });
-
