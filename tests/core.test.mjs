@@ -109,7 +109,7 @@ test("participant presets mirror consensflow-pi exactly (image preset included)"
     "orpheus", "linus", "erato", "saga", "gunnlod", "kvasir",
     "kronos", "atlas", "baldr", "vali", "forseti", "bragi", "ullr",
     "hermod", "loki", "nike", "freya", "zephyros", "sif",
-    "hades", "helios", "ares", "hephaestus", "pan", "aeolus", "metis", "selene", "daedalus",
+    "hades", "helios", "ares", "hephaestus", "pan", "aeolus", "metis", "prometheus", "selene", "daedalus",
     "odin", "heimdall", "thor", "tyr", "vidar", "njord", "mimir",
     "pygmalion",
   ]);
@@ -137,6 +137,10 @@ test("participant presets mirror consensflow-pi exactly (image preset included)"
   assert.equal(getPreset("daedalus").thinking, "high");
   assert.equal(getPreset("selene").model, "openrouter/moonshotai/kimi-k2.7-code");
   assert.equal(getPreset("selene").thinking, "high");
+  // GLM 5.2 on pi (Greek model zoo, high thinking).
+  assert.equal(getPreset("prometheus").kind, "pi");
+  assert.equal(getPreset("prometheus").model, "openrouter/z-ai/glm-5.2");
+  assert.equal(getPreset("prometheus").thinking, "high");
   assert.equal(getPreset("heimdall").effort, "high");
   assert.equal(getPreset("sif").effort, "low");
   // Fable 5 family follows the same rules: claude-code gets max, the rest cap at xhigh.
