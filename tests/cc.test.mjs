@@ -5,7 +5,8 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { codexAuthPath, loadCodexAuth } from "../lib/codex-auth.js";
-import { buildImageRequestBody, decodeChatGptAccountId, extractImageFromEvents, saveImagePng } from "../lib/image.js";
+import { buildImageRequestBody, decodeChatGptAccountId, extractImageFromEvents, imageFileToDataUrl, saveImagePng } from "../lib/image.js";
+import { parseRunOptions } from "../bin/cf.mjs";
 import { spawnWithInput } from "../lib/runners.js";
 import { loadSession, saveSession, workspaceKey } from "../lib/state.js";
 import { collectHandoff, parseTranscriptJsonl, serializeClaudeTranscript } from "../lib/transcript.js";
@@ -588,6 +589,20 @@ test("image helpers: JWT account id, request body, SSE extraction, PNG save", as
   assert.equal(body.model, "gpt-5.5");
   assert.equal(body.tools[0].type, "image_generation");
   assert.equal(body.input[0].content[0].text, "a red cat");
+  // Without references the content is text-only (no input_image parts) — regression guard.
+  assert.equal(body.input[0].content.length, 1);
+  assert.equal(body.input[0].content.some((part) => part.type === "input_image"), false);
+
+  // With reference images, each becomes an input_image part (image_url is a plain string), after the text.
+  const refs = ["data:image/png;base64,AAA", "data:image/jpeg;base64,BBB"];
+  const refBody = buildImageRequestBody("blend these", "gpt-5.5", refs);
+  assert.equal(refBody.input[0].content[0].type, "input_text");
+  const imageParts = refBody.input[0].content.filter((part) => part.type === "input_image");
+  assert.equal(imageParts.length, 2);
+  assert.deepEqual(imageParts.map((part) => part.image_url), refs);
+  assert.match(refBody.instructions, /reference image/i);
+  // Non-string / empty entries are dropped so a stray value can't corrupt the request.
+  assert.equal(buildImageRequestBody("p", "gpt-5.5", ["", null, 5]).input[0].content.length, 1);
 
   // extractImageFromEvents finds the base64 image + metadata across SSE events.
   const img = extractImageFromEvents([
@@ -609,6 +624,42 @@ test("image helpers: JWT account id, request body, SSE extraction, PNG save", as
     const saved = await saveImagePng(Buffer.from("PNGDATA").toString("base64"), path.join(dir, "runs", "img1"), "image.png");
     assert.equal((await readFile(saved)).toString(), "PNGDATA");
   });
+});
+
+test("reference images: imageFileToDataUrl encodes by extension; rejects unknown/missing", async () => {
+  await withTempDir(async (dir) => {
+    const pngPath = path.join(dir, "ref.png");
+    await writeFile(pngPath, Buffer.from("PNGBYTES"));
+    const url = await imageFileToDataUrl(pngPath);
+    assert.equal(url, `data:image/png;base64,${Buffer.from("PNGBYTES").toString("base64")}`);
+
+    // Extension drives the mime type (case-insensitive).
+    const jpgPath = path.join(dir, "ref.JPG");
+    await writeFile(jpgPath, Buffer.from("JPGBYTES"));
+    assert.match(await imageFileToDataUrl(jpgPath), /^data:image\/jpeg;base64,/);
+
+    // Unsupported extension and missing file both throw clearly.
+    await writeFile(path.join(dir, "ref.txt"), "nope");
+    await assert.rejects(() => imageFileToDataUrl(path.join(dir, "ref.txt")), /Unsupported reference image/);
+    await assert.rejects(() => imageFileToDataUrl(path.join(dir, "missing.png")), /ENOENT|no such file/);
+  });
+});
+
+test("parseRunOptions: --image is repeatable and collects into an array (both forms)", () => {
+  // Space form, repeated.
+  const a = parseRunOptions(["@pygmalion", "a cat", "--image", "x.png", "--image", "y.jpg"]);
+  assert.deepEqual(a.positional, ["@pygmalion", "a cat"]);
+  assert.deepEqual(a.flags.image, ["x.png", "y.jpg"]);
+
+  // Equals form, mixed with another flag.
+  const b = parseRunOptions(["@pygmalion", "--image=x.png", "--stream", "--image=y.webp"]);
+  assert.deepEqual(b.flags.image, ["x.png", "y.webp"]);
+  assert.equal(b.flags.stream, true);
+
+  // A single non-repeated value flag still scalar; no --image means undefined.
+  const c = parseRunOptions(["@pygmalion", "hi", "--context", "note"]);
+  assert.equal(c.flags.image, undefined);
+  assert.equal(c.flags.context, "note");
 });
 
 test("loadCodexAuth reads the Codex CLI login (account_id field, JWT fallback, clear errors)", async () => {

@@ -3,8 +3,9 @@
 // Mirrors consensflow-pi's /consensflow:cf router: participants admin, doctor, status, and one-at-a-time runs.
 import fs from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { codexAuthPath, loadCodexAuth } from "../lib/codex-auth.js";
-import { generateImage, IMAGE_BACKEND, IMAGE_TRIGGER_DEFAULT, saveImagePng } from "../lib/image.js";
+import { generateImage, imageFileToDataUrl, IMAGE_BACKEND, IMAGE_TRIGGER_DEFAULT, saveImagePng } from "../lib/image.js";
 import { formatPresets, getPreset, listPresetIds, participantFromPreset } from "../lib/presets.js";
 import {
   cfRoot,
@@ -254,11 +255,17 @@ async function handleRun(tokens, cwd) {
   console.log(renderRunResult(result));
 }
 
-function parseRunOptions(tokens) {
+export function parseRunOptions(tokens) {
   const positional = [];
   const flags = {};
-  const valueFlags = new Set(["tools", "toolsPolicy", "context", "timeout-ms", "timeoutMs", "prompt", "prompt-file", "handoff-file"]);
+  const valueFlags = new Set(["tools", "toolsPolicy", "context", "timeout-ms", "timeoutMs", "prompt", "prompt-file", "handoff-file", "image"]);
   const booleanFlags = new Set(["stream", "json", "rw", "handoff", "no-handoff"]);
+  // Repeatable flags collect into an array: `--image a.png --image b.png` → ["a.png", "b.png"].
+  const multiValueFlags = new Set(["image"]);
+  const setValue = (name, value) => {
+    if (multiValueFlags.has(name)) (flags[name] ??= []).push(value);
+    else flags[name] = value;
+  };
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i];
     if (!token.startsWith("--") || token === "--") {
@@ -269,7 +276,7 @@ function parseRunOptions(tokens) {
     const eq = raw.indexOf("=");
     const name = eq >= 0 ? raw.slice(0, eq) : raw;
     if (eq >= 0) {
-      if (valueFlags.has(name)) flags[name] = raw.slice(eq + 1);
+      if (valueFlags.has(name)) setValue(name, raw.slice(eq + 1));
       else if (booleanFlags.has(name)) flags[name] = raw.slice(eq + 1) !== "false";
       else positional.push(token);
       continue;
@@ -281,7 +288,7 @@ function parseRunOptions(tokens) {
     if (valueFlags.has(name)) {
       const next = tokens[i + 1];
       if (next === undefined || next.startsWith("--")) throw new Error(`--${name} requires a value`);
-      flags[name] = next;
+      setValue(name, next);
       i += 1;
       continue;
     }
@@ -302,7 +309,11 @@ async function runImageParticipant(cwd, participant, prompt, flags) {
   await fs.mkdir(runDir, { recursive: true });
   const triggerModel = participant.model || IMAGE_TRIGGER_DEFAULT;
   const timeoutMs = effectiveTimeoutMs(participant, flags["timeout-ms"]);
-  const image = await generateImage({ token, accountId, prompt, triggerModel, signal: AbortSignal.timeout(timeoutMs) });
+  // Optional reference images (`--image <path>`, repeatable) become input_image parts so gpt-image-2
+  // can edit/condition on them. Paths are read as given (relative to cwd, like --prompt-file).
+  const imagePaths = Array.isArray(flags.image) ? flags.image : flags.image ? [flags.image] : [];
+  const images = await Promise.all(imagePaths.map((p) => imageFileToDataUrl(p)));
+  const image = await generateImage({ token, accountId, prompt, triggerModel, images, signal: AbortSignal.timeout(timeoutMs) });
   const savedPath = await saveImagePng(image.base64, runDir, "image.png");
   const result = {
     schemaVersion: 1,
@@ -312,6 +323,7 @@ async function runImageParticipant(cwd, participant, prompt, flags) {
     kind: "image",
     backend: IMAGE_BACKEND,
     triggerModel,
+    referenceImages: imagePaths,
     revisedPrompt: image.revisedPrompt,
     responseId: image.responseId,
     participant: { id: participant.id, kind: participant.kind },
@@ -327,6 +339,7 @@ async function runImageParticipant(cwd, participant, prompt, flags) {
       `# @${participant.id}`,
       "",
       `Generated an image with **${IMAGE_BACKEND}** (via your Codex CLI login).`,
+      imagePaths.length ? `Reference image(s): ${imagePaths.join(", ")}` : undefined,
       image.revisedPrompt ? `Revised prompt: ${image.revisedPrompt}` : undefined,
       `Saved: ${savedPath}`,
       "",
@@ -487,7 +500,7 @@ Manage participants (shared across Claude Code and Pi, ${participantsPath(proces
 For the lead (via the Bash tool), the CLI subcommands are \`status\` | \`doctor\` |
 \`participants list|presets|add|show|remove\` | \`run @name <prompt>\`, with run flags
 \`--stream\` | \`--rw\` | \`--tools workspace-write|full-auto\` | \`--prompt <text>\` |
-\`--prompt-file <file>\` | \`--context <note>\` | \`--no-handoff\` | \`--timeout-ms <ms>\` | \`--json\`.
+\`--prompt-file <file>\` | \`--context <note>\` | \`--no-handoff\` | \`--timeout-ms <ms>\` | \`--image <path>\` (image participants) | \`--json\`.
 
 Rules:
 
@@ -499,9 +512,12 @@ Rules:
 `;
 }
 
-try {
-  await main();
-} catch (error) {
-  console.error(`ConsensFlow error: ${error instanceof Error ? error.message : String(error)}`);
-  process.exitCode = 1;
+// Run only when invoked as the CLI entry point, so tests can import the pure helpers above.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    await main();
+  } catch (error) {
+    console.error(`ConsensFlow error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+  }
 }

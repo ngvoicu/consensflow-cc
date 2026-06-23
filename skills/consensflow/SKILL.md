@@ -13,7 +13,7 @@ Use participants for all of these, one participant at a time. No preset is intri
 
 - **Advice / second opinion / design critique.** Ask a participant to inspect context, critique a plan, assess a pasted diff, identify risks, or suggest tests.
 - **Doing work / code-writing help.** The same participant can implement, refactor, or run commands when it is write-capable (`--rw`, `--tools workspace-write`, `--tools full-auto`, or a stored write-capable roster entry). Treat it like a temporary helper: after the run, inspect `git status` / `git diff` and relevant tests, then ask the user before keeping or building on the changes unless they pre-authorized it.
-- **Image generation.** `@pygmalion` (or any `kind=image` participant) uses **gpt-image-2** via the Codex backend / Codex CLI login. It receives the image prompt only — no session handoff — saves `image.png` in the ConsensFlow run dir under `~/.consensflow/workspaces/…`, and the lead can open/show that file with the Read tool.
+- **Image generation.** `@pygmalion` (or any `kind=image` participant) uses **gpt-image-2** via the Codex backend / Codex CLI login. It receives the image prompt only — no session handoff — saves `image.png` in the ConsensFlow run dir under `~/.consensflow/workspaces/…`, and the lead can open/show that file with the Read tool. Optionally pass one or more **reference images** with `--image <path>` (repeatable) so gpt-image-2 edits/conditions on them — supply a file path (.png/.jpg/.jpeg/.webp/.gif); a pasted image with no path on disk can't be used.
 
 ## How to run it
 
@@ -35,6 +35,10 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "Review this diff" --stream
 # Per-call write access: use only when explicitly needed; the approval gate still applies afterward
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @builder "Make the minimal fix" --rw
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @builder "Make the minimal fix" --tools workspace-write
+
+# Image generation with optional reference image(s) (--image is repeatable; image participants only)
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @pygmalion "A watercolor of this house at sunset" --image /tmp/house.png
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @pygmalion "Blend these into one scene" --image a.png --image b.jpg
 ```
 
 Important run flags (flags may appear before or after the prompt/ref; `--prompt-file` may stand in for the prompt):
@@ -45,6 +49,7 @@ Important run flags (flags may appear before or after the prompt/ref; `--prompt-
 - `--rw` — shorthand for `--tools workspace-write` for this run only.
 - `--tools workspace-write|full-auto` — per-call write override; does not mutate the roster.
 - `--timeout-ms <ms>` — per-call timeout override.
+- `--image <path>` — reference image for an `image` participant; repeatable for multiple references. Ignored by text participants.
 - `--json` — print full run metadata instead of just the human answer.
 
 The handoff (a serialized snapshot of this session) is attached automatically from the transcript stash the plugin hooks maintain. If no transcript was stashed, the run warns `Handoff: empty` — the participant saw none of this session.
@@ -111,7 +116,7 @@ Presets use default safe mode; the same model+effort family exists on every engi
 - **Deep open-weights**: Kimi K2.7 Code — `@luna` (OpenCode), `@daedalus` (Pi craftsman preset), `@selene` (Pi moon-goddess alias; both Pi presets use high thinking).
 - **Fast/cheap tier** (quick gut-checks): `@hermod` (Claude Haiku 4.5), `@nike`/`@sif` (Gemini 3.5 Flash on Pi/OpenCode), `@zephyros`/`@freya` (DeepSeek V4 Flash on Pi/OpenCode).
 - **Model zoo** (same OpenRouter models on two engines; Greek = pi, Norse = opencode): DeepSeek V4 Pro `@hades`/`@odin`, Gemini 3.1 Pro `@helios`/`@heimdall`, Grok 4.3 `@ares`/`@thor`, Qwen3.7 Max `@hephaestus`/`@tyr`, Llama 4 Maverick `@pan`/`@vidar`, Mistral Large `@aeolus`/`@njord`, MiniMax M3 `@metis`/`@mimir`, GLM 5.2 `@prometheus` (pi only).
-- **Image**: `@pygmalion` (kind=image) generates a picture with gpt-image-2 via the Codex CLI login (`codex login`) — prompt-only (no handoff), PNG saved as `image.png` in the run dir; open it with the Read tool to view or show it.
+- **Image**: `@pygmalion` (kind=image) generates a picture with gpt-image-2 via the Codex CLI login (`codex login`) — prompt-only (no handoff), optional `--image <path>` reference(s), PNG saved as `image.png` in the run dir; open it with the Read tool to view or show it.
 
 Model and effort strings pass through to the engine verbatim, so any identifier the engine accepts works.
 
@@ -129,7 +134,7 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add all
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>|--thinking <t>] [--tools workspace-write|full-auto] [--cwd <subdir>]
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants show @name
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants remove @name
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @name <prompt> [--stream] [--rw|--tools workspace-write|full-auto] [--prompt-file <file>] [--context <note>] [--no-handoff] [--timeout-ms <ms>] [--json]
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @name <prompt> [--stream] [--rw|--tools workspace-write|full-auto] [--prompt-file <file>] [--context <note>] [--no-handoff] [--timeout-ms <ms>] [--image <path> …] [--json]
 ```
 
 User-facing slash commands are thin wrappers around that CLI: `/consensflow:cf`, `/consensflow:status`, `/consensflow:doctor`, `/consensflow:presets`, and `/consensflow:participants …`.
