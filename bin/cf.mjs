@@ -313,7 +313,7 @@ async function runImageParticipant(cwd, participant, prompt, flags) {
   // can edit/condition on them. Paths are read as given (relative to cwd, like --prompt-file).
   const imagePaths = Array.isArray(flags.image) ? flags.image : flags.image ? [flags.image] : [];
   const images = await Promise.all(imagePaths.map((p) => imageFileToDataUrl(p)));
-  const image = await generateImage({ token, accountId, prompt, triggerModel, images, signal: AbortSignal.timeout(timeoutMs) });
+  const image = await generateImage({ token, accountId, prompt, triggerModel, images, signal: timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined });
   const savedPath = await saveImagePng(image.base64, runDir, "image.png");
   const result = {
     schemaVersion: 1,

@@ -272,6 +272,15 @@ test("spawnWithInput survives a child that exits without reading stdin (EPIPE)",
   assert.equal(result.timedOut, false);
 });
 
+test("spawnWithInput with timeoutMs:0 arms no timer — a child that runs past 0ms completes normally, not timed out", async () => {
+  // Under the old setTimeout(...,0) behavior this child would have been SIGTERM'd at ~0ms
+  // (timedOut:true). With the no-timeout guard it runs to completion.
+  const result = await spawnWithInput(process.execPath, ["-e", "setTimeout(() => process.stdout.write('done'), 120)"], { timeoutMs: 0 });
+  assert.equal(result.timedOut, false);
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.stdout, "done");
+});
+
 test("spawnWithInput streams complete stdout lines via onStdoutLine: carry across splits, CRLF-stripped, blanks skipped, newline-less tail flushed [STRM-03]", async () => {
   await withTempDir(async (dir) => {
     const fake = path.join(dir, "chunker.mjs");
@@ -301,10 +310,14 @@ test("spawnWithInput streams complete stdout lines via onStdoutLine: carry acros
   });
 });
 
-test("effectiveTimeoutMs: per-call override wins over participant config, then the default", () => {
+test("effectiveTimeoutMs: per-call override wins over participant config; absent/non-positive means no timeout (0)", () => {
   assert.equal(effectiveTimeoutMs({ timeoutMs: 900000 }, 1234), 1234);
   assert.equal(effectiveTimeoutMs({ timeoutMs: 900000 }, undefined), 900000);
-  assert.equal(effectiveTimeoutMs({}, undefined), 10 * 60 * 1000);
+  // No configured timeout → unbounded (0).
+  assert.equal(effectiveTimeoutMs({}, undefined), 0);
+  // An explicit 0 (per-call or per-participant) disables the timeout; the || chain used to swallow it.
+  assert.equal(effectiveTimeoutMs({ timeoutMs: 0 }, undefined), 0);
+  assert.equal(effectiveTimeoutMs({ timeoutMs: 900000 }, 0), 0);
 });
 
 test("toolsPolicy alone gates write access; a missing policy fails safe to readonly", () => {
