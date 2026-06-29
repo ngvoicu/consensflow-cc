@@ -353,7 +353,7 @@ test("e2e: all four engines run, parse, and persist artifacts through the real s
 
       const { packet, result } = await latestPacket(ws, dir);
       assert.match(packet, /# ConsensFlow Packet/);
-      assert.match(packet, /Read-only: you can inspect the workspace/);
+      assert.match(packet, /Read-write: you can read and modify this workspace/);
       assert.match(packet, /ping from the test/);
       assert.equal(result.output, expect);
       assert.equal(result.exitCode, 0);
@@ -370,19 +370,19 @@ test("e2e: all four engines run, parse, and persist artifacts through the real s
     // Engine-specific guards observed from inside the children.
     const claude = JSON.parse(await readFile(path.join(fake.out, "claude.json"), "utf8"));
     assert.ok(claude.argv.includes("--bare"), "claude child skips plugin/hook discovery");
-    assert.ok(claude.argv.includes("--disallowedTools"), "claude readonly deny list");
+    assert.equal(claude.argv.includes("--disallowedTools"), false, "no claude deny list");
     assert.equal(claude.argv[claude.argv.indexOf("--model") + 1], "claude-opus-4-8");
     assert.equal(claude.argv[claude.argv.indexOf("--effort") + 1], "max");
     assert.equal(claude.env.ANTHROPIC_API_KEY, null, "billing guard strips ANTHROPIC_API_KEY");
     const codex = JSON.parse(await readFile(path.join(fake.out, "codex.json"), "utf8"));
     assert.ok(codex.argv.includes("--sandbox"), "codex sandbox flag");
-    assert.ok(codex.argv.includes("read-only"), "codex readonly sandbox");
+    assert.ok(codex.argv.includes("workspace-write"), "codex workspace-write sandbox");
     assert.equal(codex.env.OPENAI_API_KEY, null, "billing guard strips OPENAI_API_KEY");
     const piDump = JSON.parse(await readFile(path.join(fake.out, "pi.json"), "utf8"));
     assert.ok(piDump.argv.includes("--no-extensions"), "pi child runs without extensions");
     assert.equal(piDump.argv[piDump.argv.indexOf("--thinking") + 1], "xhigh");
     const opencode = JSON.parse(await readFile(path.join(fake.out, "opencode.json"), "utf8"));
-    assert.deepEqual(JSON.parse(opencode.env.OPENCODE_PERMISSION), { edit: "deny", bash: "deny" });
+    assert.equal(opencode.env.OPENCODE_PERMISSION, null, "no opencode permission overlay");
   });
 });
 
@@ -488,27 +488,32 @@ test("e2e: runParticipant writes a transcript.md backstop (event trail) and sets
   });
 });
 
-test("e2e: --rw makes a read-only participant write-capable for one run; default stays readonly [STRM-25]", async () => {
+test("e2e: a default run is already read-write; --rw is accepted, --tools full-auto escalates [STRM-25]", async () => {
   await withTempDir(async (dir) => {
     const ws = path.join(dir, "ws");
     await mkdir(ws, { recursive: true });
     const fake = await makeFakeEngines(dir);
     const ctx = { ws, dir, fake };
-    await runCf(["participants", "add", "zeus"], ctx); // claude-code, stored readonly
+    await runCf(["participants", "add", "zeus"], ctx); // claude-code, stored workspace-write
 
-    // --rw: write capability reaches the engine for this run.
-    await runCf(["run", "@zeus", "go", "--rw"], ctx);
+    // Default run: write capability already reaches the engine — no flag needed, no deny list.
+    await runCf(["run", "@zeus", "go"], ctx);
     let claude = JSON.parse(await readFile(path.join(fake.out, "claude.json"), "utf8"));
     const allowed = claude.argv[claude.argv.indexOf("--allowedTools") + 1];
-    assert.match(allowed, /Edit/, "--rw grants Edit to the engine");
-    assert.match(allowed, /Write/, "--rw grants Write to the engine");
-    assert.equal(claude.argv.includes("--disallowedTools"), false, "--rw drops the read-only deny list");
+    assert.match(allowed, /Edit/, "default run grants Edit");
+    assert.match(allowed, /Write/, "default run grants Write");
+    assert.equal(claude.argv.includes("--disallowedTools"), false, "no read-only deny list");
+    assert.equal(claude.argv.includes("--dangerously-skip-permissions"), false, "default is not full-auto");
 
-    // A subsequent run WITHOUT --rw is read-only again — the override never persisted to the roster.
-    await runCf(["run", "@zeus", "go"], ctx);
+    // --rw is accepted and equivalent to the default workspace-write (no escalation).
+    await runCf(["run", "@zeus", "go", "--rw"], ctx);
     claude = JSON.parse(await readFile(path.join(fake.out, "claude.json"), "utf8"));
-    assert.equal(claude.argv[claude.argv.indexOf("--allowedTools") + 1], "Read,Grep,Glob", "default run stays read-only");
-    assert.ok(claude.argv.includes("--disallowedTools"), "default run keeps the deny list");
+    assert.equal(claude.argv.includes("--dangerously-skip-permissions"), false, "--rw is not an escalation");
+
+    // --tools full-auto reaches the engine's danger flag.
+    await runCf(["run", "@zeus", "go", "--tools", "full-auto"], ctx);
+    claude = JSON.parse(await readFile(path.join(fake.out, "claude.json"), "utf8"));
+    assert.ok(claude.argv.includes("--dangerously-skip-permissions"), "--tools full-auto reaches the danger flag");
   });
 });
 

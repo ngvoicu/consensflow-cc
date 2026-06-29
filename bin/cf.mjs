@@ -441,19 +441,17 @@ function formatParticipantLine(p) {
   const cwd = p.cwd ? ` cwd=${p.cwd}` : "";
   const skills = p.kind === "pi" ? ` skills=${p.skillsPolicy ?? "default"}` : "";
   const preset = p.preset ? ` preset=${p.preset}` : "";
-  // Safe mode is the quiet/default display. Only surface persistent write-capable roster entries;
-  // per-call --rw / --tools overrides remain explicit at run time.
+  // workspace-write is the quiet default; only surface the explicit full-auto escalation.
   const policy = effectiveToolsPolicy(p);
-  const access = policy === "readonly" ? "" : ` access=${policy}`;
+  const access = policy === "full-auto" ? ` access=full-auto` : "";
   const head = `- @${p.id} (${p.kind}${model}${effort}${cwd}${skills}${preset})${access}`;
   return p.description ? `${head}\n    ${p.description}` : head;
 }
 
-// Just the answer on a clean default safe-mode run. Diagnostics appear only when they matter: the run
-// failed, the handoff was unexpectedly empty, or the participant could have written to the
-// workspace. Full metadata stays in result.json (and `--json`).
+// Just the answer on a clean run. Diagnostics appear only when they matter: the run failed or the
+// handoff was unexpectedly empty. Every participant now runs read-write, so the inspect-your-repo
+// nudge always shows. Full metadata stays in result.json (and `--json`).
 function renderRunResult(result) {
-  const writeCapable = effectiveToolsPolicy(result.participant) !== "readonly";
   const lines = [`# @${result.participant.id}`];
   if (result.timedOut) {
     // A timeout is not a failure with a meaningful exit code — the partial trail below is the
@@ -463,7 +461,7 @@ function renderRunResult(result) {
     lines.push("", `Run failed: exit ${result.exitCode} — artifacts: ${result.runDir}`);
   }
   if (result.handoffSummary?.startsWith("empty")) lines.push("", `Handoff: ${result.handoffSummary}`);
-  if (writeCapable) lines.push("", "> Write-capable run: this participant could edit files and run commands. Inspect what changed in the workspace (e.g. `git status` / `git diff` in a repo) and review it before keeping or building on it.");
+  lines.push("", "> Read-write run: this participant could edit files and run commands. Inspect what changed (e.g. `git status` / `git diff`) before keeping or building on it.");
   lines.push("", result.output);
   return lines.join("\n");
 }
@@ -505,8 +503,7 @@ For the lead (via the Bash tool), the CLI subcommands are \`status\` | \`doctor\
 Rules:
 
 - Send to one participant at a time.
-- Participants use default safe mode (no write tools) unless you explicitly configure \`--tools workspace-write\` or
-  \`full-auto\` (a write-capable participant can edit files and run commands).
+- Participants run as standard read-write CLI calls (workspace-write by default) — like running the CLI yourself, they can edit files and run commands. \`--tools full-auto\` escalates to bypass the workspace sandbox.
 - One-shot: participants do not remember previous calls; each call re-sends the current session handoff.
 - The current Claude Code session remains the lead and decides what to implement.
 `;

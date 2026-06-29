@@ -20,7 +20,7 @@ The whole idea in five bullets:
 
 - **Participant** = a named *(agent + model)* combo. Configure once, reuse from any project. The roster is **shared across both tools** at `~/.consensflow/participants.json` — set it up once, use it from pi and cc.
 - **One at a time.** `@zeus @athena …` is rejected — ask one, read, then ask the next.
-- **Safe by default.** A participant starts in safe mode (no write tools), but it is not review-only; use `--rw` or `--tools workspace-write` when you want that call to edit files or run commands.
+- **Standard read-write by default.** A participant runs as a normal CLI call — exactly like running that agent yourself — so by default it can read, edit files, and run commands, confined to the project workspace (`workspace-write`). The lead still decides whether to keep its changes. `--tools full-auto` is the only escalation; it bypasses the engine's sandbox/approval checks.
 - **One-shot, but context-aware.** Each call is fresh (no memory of past calls), yet it always receives the current session handoff — *including earlier participants' answers* — so the 2nd agent you ask can build on the 1st.
 - **The lead can ask too — and asks before applying.** Claude Code will consult a participant on its own initiative when a second opinion would help, then report back and get your go-ahead before applying anything — unless you pre-authorized it.
 
@@ -38,11 +38,11 @@ Claude (the lead) executes via the Bash tool:
    ▼
 cf.mjs builds a "packet" for @zeus:
    • who @zeus is        (claude-code · claude-opus-4-8 · max)
-   • mode line           (safe mode — or write mode if you made it write-capable)
+   • mode line           (workspace-write by default — or full-auto if you escalated)
    • handoff             (a snapshot of THIS session, from the transcript stash the hooks maintain)
    • your question
    ▼
-Runs @zeus as an isolated, one-shot subprocess (default safe mode, no session persistence)
+Runs @zeus as an isolated, one-shot subprocess (default workspace-write, no session persistence)
    ▼
 Saves artifacts:  ~/.consensflow/workspaces/<ws>/runs/<run-id>/{packet.md, stdout.txt, stderr.txt, result.json}
    ▼
@@ -101,7 +101,7 @@ Or fully custom (any model string the engine accepts — values pass through ver
 /consensflow:participants add --name Builder --kind opencode --model openrouter/moonshotai/kimi-k2.7-code --tools workspace-write
 ```
 
-> **Default vs write.** By default a participant runs without write tools, but it can still plan, critique, explain, or propose code. To let it actually edit files and run commands, pass `--tools workspace-write` (or `full-auto`) when creating it, or use `--rw` on a single run — write access is never implicit.
+> **Default vs full-auto.** By default a participant runs read-write, confined to the project workspace (`workspace-write`) — it can read, plan, critique, edit files, and run commands, just like running the agent yourself. To remove that confinement and bypass the engine's sandbox/approval checks, pass `--tools full-auto` when creating it, or use it on a single run. (`--rw` is still accepted but redundant — it just equals the default.)
 
 Config lives in the **shared** roster `~/.consensflow/participants.json` — used by both consensflow-cc and consensflow-pi, so a participant added in one is immediately available in the other. There are no per-tool config roots. If this shared file is missing but an older per-tool roster exists at `~/.consensflow/consensflow-cc/participants.json` or `~/.consensflow/consensflow-pi/participants.json`, ConsensFlow migrates those entries into the shared file once.
 
@@ -133,7 +133,7 @@ The answer is relayed inline. Every run is saved under the ConsensFlow home — 
 
 **Watch it work live:** routed `@name` prompts and explicit `/consensflow:cf` participant runs always use `--stream` in the foreground, so the participant's thinking, tool calls, and answer render to stdout as they arrive — the lead must not drop `--stream`, detach the run, or summarize the trail away (the one exception is an explicit user request for `--json`). If you invoke the CLI manually, add `--stream` (`cf run @name <prompt> --stream`) and keep the run in the foreground. The parsed final answer is always printed after the child exits too, so streamed runs end with a durable reply section. Without `--stream` you get just the clean final answer; either way the run writes `transcript.md` as a durability backstop. On a timeout you get the partial trail under a clear header — never a raw event dump.
 
-After a write-capable run, review what changed yourself (e.g. `git status` / `git diff` in your repo) before keeping it. **Per-call write:** add `--rw` (or `--tools workspace-write`) to make only that run write-capable — no second roster entry needed.
+Since a consult can modify files, review what changed yourself (e.g. `git status` / `git diff` in your repo) before keeping it — the lead decides whether to keep or build on a participant's changes. **Per-call escalation:** add `--tools full-auto` to lift the workspace confinement on only that run — no second roster entry needed.
 
 ### The handoff — what a participant actually sees
 
@@ -148,7 +148,7 @@ cf.mjs parses the transcript JSONL at call time: "User: … / Lead: …" turns,
 tool calls noted, thinking redacted, sidechains/noise skipped,
 earlier participants' answers kept near-whole
    ▼
-capped at 120 KB (~30k tokens) — keeps the MOST RECENT tail,
+capped at 48 KB by default (CONSENSFLOW_HANDOFF_MAX_BYTES) — keeps the MOST RECENT tail,
 older history drops off behind a truncation marker
    ▼
 embedded in the packet, between the mode line and your question
@@ -157,7 +157,7 @@ embedded in the packet, between the mode line and your question
 What that means in practice:
 
 - **It's a rendering, not the raw context.** The participant gets readable conversation text, never your model's actual context window — so a 1M-token lead session can never overflow a 200k participant.
-- **Short and medium sessions hand off essentially everything.** Only when the serialized text outgrows 120 KB does the oldest part fall away; a very long session hands off just the recent stretch.
+- **Short and medium sessions hand off essentially everything.** Only when the serialized text outgrows the cap (48 KB by default, tunable via `CONSENSFLOW_HANDOFF_MAX_BYTES`) does the oldest part fall away; a very long session hands off just the recent stretch.
 - **You can see what rode along.** A clean run shows just the answer; a run with no stashed transcript warns `Handoff: empty` (the hooks aren't running, e.g. plugin not loaded). `packet.md` in the run dir is byte-for-byte what the participant received.
 - **A handoff is context, never a precondition.** If the stash is missing the run still works — the participant just answers from your prompt and whatever it reads in the workspace, and the `Handoff:` line tells you that's what happened.
 - **Cross-pollination is deliberate.** Earlier participants' answers are kept near-whole, so `@zeus Do you agree with Athena?` works. For a genuinely independent opinion, ask that participant first.
@@ -183,14 +183,15 @@ cf status                        # participants + session stash + latest run
 cf doctor                        # which engine CLIs are installed
 cf participants presets|list|show @name|remove @name
 cf participants add <preset>|all|--name … --kind … --model …
-cf run @name <prompt> [--stream] [--rw | --tools workspace-write|full-auto] [--prompt-file f] [--context note] [--no-handoff] [--timeout-ms n] [--json]
-#   flags may go before or after the prompt; --stream streams events live, --rw makes this run write-capable
+cf run @name <prompt> [--stream] [--tools workspace-write|full-auto] [--prompt-file f] [--context note] [--no-handoff] [--timeout-ms n] [--json]
+#   flags may go before or after the prompt; --stream streams events live
+#   runs are workspace-write by default; --tools full-auto escalates (bypasses sandbox/approval); --rw is accepted but redundant
 ```
 
 ## Safety model
 
-- **Isolated & one-shot:** each participant runs in its own subprocess, started in your workspace (a `--cwd` that escapes it is rejected before launch, realpath-checked). Isolation comes from each engine's tool policy — a true OS sandbox only for Codex — so treat the default safe mode as policy enforcement, not a hard sandbox. No memory between calls.
-- **Default-mode enforcement per engine:** OS no-write sandbox for Codex, allow+deny tool lists for Claude Code, a limited tool allowlist for Pi, and a deny-edit/bash permission override (`OPENCODE_PERMISSION`) for OpenCode.
+- **Isolated & one-shot:** each participant runs in its own subprocess, started in your workspace (a `--cwd` that escapes it is rejected before launch, realpath-checked). No memory between calls.
+- **Workspace confinement by default:** participants run with the engine's `workspace-write` policy — read, edit, and run commands, but scoped to the project workspace. `--tools full-auto` is the only escalation and lifts that confinement, bypassing the engine's sandbox/approval checks; use it deliberately.
 - **No recursion:** every child gets `CONSENSFLOW_CHILD=1` (hooks and the CLI bail inside it), and `claude` children run `--bare` so they don't load this plugin at all. Pi children run `--no-extensions`.
 - **Billing guard:** `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` are stripped from claude/codex children so runs stay on your subscription logins.
 - **You're always the lead.** ConsensFlow routes your question and shows you the answer — Claude summarizes and asks before applying anything, unless you've already told it to proceed.

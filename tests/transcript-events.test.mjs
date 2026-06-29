@@ -166,7 +166,7 @@ test("transcript-events: claude adapter (stream-json content blocks) + final ext
 
   // The invocation requests stream-json + --verbose, and NOT --include-partial-messages (we want
   // complete content-block events, not token-level deltas).
-  const inv = buildRunnerInvocation({ kind: "claude-code", toolsPolicy: "readonly", model: "claude-opus-4-8" }, "/tmp/p.md", "/repo");
+  const inv = buildRunnerInvocation({ kind: "claude-code", toolsPolicy: "workspace-write", model: "claude-opus-4-8" }, "/tmp/p.md", "/repo");
   assert.ok(inv.args.includes("stream-json"), "stream-json output format");
   assert.ok(inv.args.includes("--verbose"), "stream-json requires --verbose");
   assert.equal(inv.args.includes("--include-partial-messages"), false, "no token-level deltas");

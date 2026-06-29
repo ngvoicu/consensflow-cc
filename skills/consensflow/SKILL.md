@@ -5,14 +5,14 @@ description: Use ConsensFlow inside Claude Code to consult one named participant
 
 # ConsensFlow
 
-ConsensFlow lets the lead (this Claude Code session) consult one named participant at a time. A participant is an external coding-agent CLI (claude / codex / opencode / pi) run as an isolated one-shot subprocess: it receives a handoff of the current session plus a prompt, answers once, and does not persist between calls. Talking to a participant is like phoning an advisor/helper — and, when explicitly made write-capable, briefly handing over a task. The lead stays the decision-maker and ConsensFlow never accepts or keeps participant work on its own.
+ConsensFlow lets the lead (this Claude Code session) consult one named participant at a time. A participant is an external coding-agent CLI (claude / codex / opencode / pi) run as an isolated one-shot subprocess: it receives a handoff of the current session plus a prompt, answers once, and does not persist between calls. A participant runs as a standard read-write CLI call — exactly like running claude / codex / pi / opencode yourself: by default it can read, edit files, and run commands, confined to the project workspace. Talking to a participant is like phoning an advisor/helper and briefly handing over a task. The lead stays the decision-maker and ConsensFlow never accepts or keeps participant work on its own — inspect `git status` / `git diff` after any run before keeping changes.
 
 ## What participants can do
 
-Use participants for all of these, one participant at a time. No preset is intrinsically review-only; the same participant can advise in safe mode or do workspace work when made write-capable:
+Use participants for all of these, one participant at a time. No preset is intrinsically review-only; the same participant can advise or do workspace work in the same read-write run:
 
 - **Advice / second opinion / design critique.** Ask a participant to inspect context, critique a plan, assess a pasted diff, identify risks, or suggest tests.
-- **Doing work / code-writing help.** The same participant can implement, refactor, or run commands when it is write-capable (`--rw`, `--tools workspace-write`, `--tools full-auto`, or a stored write-capable roster entry). Treat it like a temporary helper: after the run, inspect `git status` / `git diff` and relevant tests, then ask the user before keeping or building on the changes unless they pre-authorized it.
+- **Doing work / code-writing help.** The same participant can implement, refactor, or run commands by default — it runs read-write in the project workspace with no extra flag. Treat it like a temporary helper: after the run, inspect `git status` / `git diff` and relevant tests, then ask the user before keeping or building on the changes unless they pre-authorized it.
 - **Image generation.** `@pygmalion` (or any `kind=image` participant) uses **gpt-image-2** via the Codex backend / Codex CLI login. It receives the image prompt only — no session handoff — saves `image.png` in the ConsensFlow run dir under `~/.consensflow/workspaces/…`, and the lead can open/show that file with the Read tool. Optionally pass one or more **reference images** with `--image <path>` (repeatable) so gpt-image-2 edits/conditions on them — supply a file path (.png/.jpg/.jpeg/.webp/.gif); a pasted image with no path on disk can't be used.
 
 ## How to run it
@@ -20,7 +20,7 @@ Use participants for all of these, one participant at a time. No preset is intri
 Everything the Claude Code lead does goes through the bundled CLI via the Bash tool. Use a generous Bash timeout for frontier models (often `600000` ms or more).
 
 ```bash
-# Ask one participant (default safe mode: no write tools) and stream its trail in the foreground
+# Ask one participant (read-write by default) and stream its trail in the foreground
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "What's the riskiest part of this design?" --stream
 
 # Add a focused brief on top of the automatic session handoff
@@ -32,9 +32,11 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus --prompt-file question.md
 # Stream normalized thinking / tool / answer events live; the parsed final answer is printed at the end too
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "Review this diff" --stream
 
-# Per-call write access: use only when explicitly needed; the approval gate still applies afterward
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @builder "Make the minimal fix" --rw
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @builder "Make the minimal fix" --tools workspace-write
+# Write is the default — no flag needed; the approval gate still applies afterward
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @builder "Make the minimal fix"
+
+# Escalate past the workspace sandbox / approval checks (danger): full-auto
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @builder "Make the minimal fix" --tools full-auto
 
 # Image generation with optional reference image(s) (--image is repeatable; image participants only)
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @pygmalion "A watercolor of this house at sunset" --image /tmp/house.png
@@ -46,8 +48,8 @@ Important run flags (flags may appear before or after the prompt/ref; `--prompt-
 - `--context <note>` — focused lead brief in addition to the auto-included handoff.
 - `--no-handoff` — skip the session handoff.
 - `--stream` — render live normalized events as the child works, then print the parsed final answer again after the child exits. **Always pass it, in the foreground, for participant runs** — never drop it, detach the run, or substitute `--json` to hide the trail. The only exception is an explicit user request for JSON output.
-- `--rw` — shorthand for `--tools workspace-write` for this run only.
-- `--tools workspace-write|full-auto` — per-call write override; does not mutate the roster.
+- `--rw` — still accepted but now redundant; it just equals the default workspace-write.
+- `--tools workspace-write|full-auto` — `workspace-write` is the default; `full-auto` bypasses the engine's sandbox/approval checks (danger). Does not mutate the roster.
 - `--timeout-ms <ms>` — per-call timeout override.
 - `--image <path>` — reference image for an `image` participant; repeatable for multiple references. Ignored by text participants.
 - `--json` — print full run metadata instead of just the human answer.
@@ -72,7 +74,7 @@ The lead may, and should, reach for a participant on its own initiative, with NO
 
 ### 2. Acting on the output is GATED — never without asking
 
-The lead MUST NOT apply, merge, commit, adopt, integrate, or otherwise act on a participant's response — and MUST NOT keep or extend any files a write-capable participant edited — without first surfacing it to the user and getting explicit approval. This is a hard rule, not a preference.
+The lead MUST NOT apply, merge, commit, adopt, integrate, or otherwise act on a participant's response — and MUST NOT keep or extend any files a participant edited — without first surfacing it to the user and getting explicit approval. This is a hard rule, not a preference.
 
 Before acting, the lead MUST present:
 
@@ -84,7 +86,7 @@ Then wait for the user to approve.
 This gate covers BOTH cases equally:
 
 - **(a) Advice in a text response.** Do not implement, refactor toward, or commit to a participant's suggestion until the user approves it.
-- **(b) Real changes by a write-capable participant.** A `workspace-write` / `full-auto` participant may have edited files or run commands in the workspace. Do not treat that work as accepted: inspect what changed yourself (for example `git status` / `git diff` in the relevant repo), then surface a summary + recommendation and get approval before keeping, building on, or committing it. If the user rejects it, revert it.
+- **(b) Real file changes by a participant.** Any participant may have edited files or run commands in the workspace — that's the default. Do not treat that work as accepted: inspect what changed yourself (for example `git status` / `git diff` in the relevant repo), then surface a summary + recommendation and get approval before keeping, building on, or committing it. If the user rejects it, revert it.
 
 **The only exception:** the user has already explicitly told the lead to proceed — e.g. "get Zeus's take and apply what makes sense," or "run the builder and commit it." Pre-authorization scoped to that request stands in for the approval; do not re-ask. Absent such an instruction, never act on a participant's output on your own.
 
@@ -105,10 +107,10 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add zeus                   
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add daedalus               # Pi-backed Kimi K2.7 Code → @daedalus
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add all                    # add every preset
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add zeus --name Deepreview # preset backend, renamed → @deepreview
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name Builder --kind codex --model gpt-5.5 --effort high --tools workspace-write   # fully custom, write-capable by default
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name Builder --kind codex --model gpt-5.5 --effort high   # fully custom; read-write like every participant
 ```
 
-Presets use default safe mode; the same model+effort family exists on every engine that runs it:
+Presets run read-write like any participant; the same model+effort family exists on every engine that runs it:
 
 - **Fable 5** (Anthropic's top model — use for the questions that really matter): `@calliope`/`@clio`/`@euterpe`/`@thalia` (Claude Code max/xhigh/high/medium), `@orpheus`/`@linus`/`@erato` (Pi xhigh/high/medium, Anthropic auth), `@saga`/`@gunnlod`/`@kvasir` (OpenCode xhigh/high/medium via OpenRouter).
 - **Opus 4.8**: `@zeus`/`@apollo`/`@artemis` (Claude Code max/xhigh/medium), `@kronos`/`@atlas` (Pi xhigh/medium, Anthropic auth), `@baldr`/`@vali` (OpenCode xhigh/medium via OpenRouter; xhigh is the ceiling outside claude-code).
@@ -139,12 +141,12 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @name <prompt> [--stream] [--rw|--to
 
 User-facing slash commands are thin wrappers around that CLI: `/consensflow:cf`, `/consensflow:status`, `/consensflow:doctor`, `/consensflow:presets`, and `/consensflow:participants …`.
 
-## Safe-mode vs write-capable participants
+## Tools policy: read-write by default, full-auto is the escalation
 
-- **Default and presets:** safe mode (no write tools). They are not review-only; they can plan, critique, explain, and propose code, but they cannot edit files or run commands until made write-capable.
-- **Stored write-capable participant:** create/update with `--tools workspace-write` (or `full-auto`) when the participant is meant to edit by default.
-- **Per-call write access:** prefer `--rw` or `--tools workspace-write` on a single `run` when you only need one write-capable call. This keeps one roster entry and makes the escalation obvious in the command history.
-- **After any write-capable run:** run your own inspection (`git status`, `git diff`, relevant tests as needed), summarize what the participant changed, give your recommendation, and wait for user approval before keeping/building on/committing the changes unless the user pre-authorized that exact action.
+- **Default and presets:** read-write, confined to the project workspace (`workspace-write`). Participants can read, plan, critique, explain, propose code, edit files, and run commands — exactly like running the CLI yourself.
+- **`--rw` / `--tools workspace-write`:** redundant; both just restate the default. No flag is needed to let a participant write.
+- **`--tools full-auto` (danger):** the only real escalation. It bypasses the engine's sandbox and approval checks, so the participant is no longer confined to the workspace. Use it only when explicitly needed, and make it obvious in the command history.
+- **After any run:** run your own inspection (`git status`, `git diff`, relevant tests as needed), summarize what the participant changed, give your recommendation, and wait for user approval before keeping/building on/committing the changes unless the user pre-authorized that exact action.
 
 ## How the user asks
 
@@ -153,7 +155,7 @@ When the user's prompt addresses one configured participant — `@zeus What's th
 ## Invariants
 
 - **One at a time.** Send to exactly one participant per call. Never fan out to several participants automatically. If the user names several, ask which one first, or ask one and wait for its answer before asking the next.
-- **Safe by default, not review-only.** A participant runs without write tools unless it was explicitly configured with `--tools workspace-write` or `full-auto`, or that call passes `--rw` / `--tools workspace-write`.
+- **Read-write by default.** A participant runs with read-write tools confined to the project workspace — it can edit files and run commands with no extra flag. `--tools full-auto` is the only escalation; it bypasses the engine's sandbox/approval checks.
 - **One-shot, no memory.** Each call is fresh. Continuity comes only from the handoff (re-sent each time), which already includes earlier participant replies — so a later participant can build on an earlier one (cross-pollination). For a genuinely *independent* opinion, ask that participant **first**, before others have replied — otherwise its handoff carries the prior answers and colors it.
 - **Foreground streaming is non-optional.** Every routed participant run passes `--stream` and stays in the foreground; the lead must not background/detach it, swap it for `--json`, or summarize the streamed trail away. The one exception is an explicit user request for JSON output.
 - **The lead is always the decision-maker.** ConsensFlow routes a prompt and returns an answer; it never implements anything on its own. Acting on any answer goes through the gate above.

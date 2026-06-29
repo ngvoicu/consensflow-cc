@@ -72,7 +72,7 @@ test("createPacket is conversational, mode-aware, and carries handoff + diff", a
       name: "Zeus",
       kind: "pi",
       model: "openrouter/anthropic/claude-opus-4.7",
-      toolsPolicy: "readonly",
+      toolsPolicy: "workspace-write",
     });
     const packet = await createPacket({
       cwd,
@@ -83,7 +83,7 @@ test("createPacket is conversational, mode-aware, and carries handoff + diff", a
     });
     assert.match(packet, /## Message from the user/);
     assert.match(packet, /Review the latest changes/);
-    assert.match(packet, /Read-only: you can inspect the workspace/);
+    assert.match(packet, /Read-write: you can read and modify this workspace/);
     assert.match(packet, /## Handoff — current session/);
     assert.match(packet, /working on the packet/);
   });
@@ -167,7 +167,7 @@ test("every preset survives normalize + runner invocation with correct flags (al
     assert.equal(participant.id, preset.id, `${preset.preset}: id survives the pipeline`);
     assert.equal(participant.kind, preset.kind, `${preset.preset}: kind`);
     assert.equal(participant.model, preset.model, `${preset.preset}: model`);
-    assert.equal(effectiveToolsPolicy(participant), "readonly", `${preset.preset}: presets are readonly`);
+    assert.equal(effectiveToolsPolicy(participant), "workspace-write", `${preset.preset}: presets are workspace-write`);
 
     if (preset.kind === "image") {
       assert.throws(() => buildRunnerInvocation(participant, "/tmp/packet.md", "/repo"), /image participants/);
@@ -182,38 +182,39 @@ test("every preset survives normalize + runner invocation with correct flags (al
 
     if (preset.kind === "claude-code") {
       assert.equal(invocation.args[invocation.args.indexOf("--effort") + 1], preset.effort, `${preset.preset}: claude effort`);
-      assert.ok(invocation.args.includes("--disallowedTools"), `${preset.preset}: claude readonly deny list`);
+      assert.equal(invocation.args.includes("--disallowedTools"), false, `${preset.preset}: no claude deny list`);
       assert.ok(invocation.args.includes("--bare"), `${preset.preset}: claude children skip plugin/hook discovery`);
     }
     if (preset.kind === "codex") {
       assert.ok(invocation.args.includes(`model_reasoning_effort=\"${preset.effort}\"`), `${preset.preset}: codex effort`);
-      assert.ok(invocation.args.includes("read-only"), `${preset.preset}: codex sandbox`);
+      assert.ok(invocation.args.includes("workspace-write"), `${preset.preset}: codex sandbox`);
     }
     if (preset.kind === "opencode") {
       if (preset.effort) assert.equal(invocation.args[invocation.args.indexOf("--variant") + 1], preset.effort, `${preset.preset}: opencode variant`);
       else assert.equal(invocation.args.includes("--variant"), false, `${preset.preset}: no catalog variant → no flag`);
-      assert.ok(invocation.env?.OPENCODE_PERMISSION, `${preset.preset}: opencode readonly permission env`);
+      assert.equal(invocation.env?.OPENCODE_PERMISSION, undefined, `${preset.preset}: no opencode permission overlay`);
     }
     if (preset.kind === "pi") {
       assert.equal(invocation.args[invocation.args.indexOf("--thinking") + 1], preset.thinking ?? "off", `${preset.preset}: pi thinking`);
-      assert.equal(invocation.args[invocation.args.indexOf("--tools") + 1], "read,grep,find,ls", `${preset.preset}: pi readonly tools`);
+      assert.equal(invocation.args[invocation.args.indexOf("--tools") + 1], "read,grep,find,ls,bash,edit,write", `${preset.preset}: pi full tools (no read-only sandbox in pi)`);
     }
   }
 });
 
 test("runner invocation maps tool policies", () => {
-  assert.equal(toolsForPi("readonly"), "read,grep,find,ls");
+  assert.equal(toolsForPi(), "read,grep,find,ls,bash,edit,write"); // pi always full tools (no read-only bash sandbox)
   assert.equal(codexSandbox("workspace-write"), "workspace-write");
-  const pi = buildRunnerInvocation({ kind: "pi", model: "openrouter/moonshotai/kimi-k2.7-code", toolsPolicy: "readonly", skillsPolicy: "default" }, "/tmp/packet.md", "/repo");
+  assert.equal(codexSandbox("full-auto"), "danger-full-access");
+  const pi = buildRunnerInvocation({ kind: "pi", model: "openrouter/moonshotai/kimi-k2.7-code", toolsPolicy: "workspace-write", skillsPolicy: "default" }, "/tmp/packet.md", "/repo");
   assert.equal(pi.command, "pi");
   assert.deepEqual(pi.args.slice(0, 6), ["--mode", "json", "--no-session", "--no-extensions", "--model", "openrouter/moonshotai/kimi-k2.7-code"]);
   assert.ok(pi.args.includes("off"));
   assert.equal(pi.args.includes("--no-skills"), false);
-  const sterilePi = buildRunnerInvocation({ kind: "pi", toolsPolicy: "readonly", skillsPolicy: "none" }, "/tmp/packet.md", "/repo");
+  const sterilePi = buildRunnerInvocation({ kind: "pi", toolsPolicy: "workspace-write", skillsPolicy: "none" }, "/tmp/packet.md", "/repo");
   assert.ok(sterilePi.args.includes("--no-skills"));
-  const codex = buildRunnerInvocation({ kind: "codex", model: "gpt-5.5", effort: "xhigh", toolsPolicy: "readonly" }, "/tmp/packet.md", "/repo");
+  const codex = buildRunnerInvocation({ kind: "codex", model: "gpt-5.5", effort: "xhigh", toolsPolicy: "workspace-write" }, "/tmp/packet.md", "/repo");
   assert.equal(codex.command, "codex");
-  assert.ok(codex.args.includes("read-only"));
+  assert.ok(codex.args.includes("workspace-write"));
   assert.ok(codex.args.includes("--ephemeral"));
   assert.ok(codex.args.includes("--skip-git-repo-check"));
   assert.ok(codex.args.includes("--ignore-user-config"));
@@ -221,45 +222,46 @@ test("runner invocation maps tool policies", () => {
   assert.ok(codex.args.includes("model_reasoning_effort=\"xhigh\""));
 });
 
-test("readonly enforcement reaches every engine: claude allow+deny lists, opencode permission env", () => {
-  // Claude default safe mode: explorers allowed, write tools explicitly denied (a user-level Bash
-  // allowlist must not leak write capability into a safe-mode participant).
-  const claude = buildRunnerInvocation({ kind: "claude-code", toolsPolicy: "readonly" }, "/tmp/packet.md", "/repo");
-  assert.ok(claude.args.includes("Read,Grep,Glob"));
-  const denyIndex = claude.args.indexOf("--disallowedTools");
-  assert.ok(denyIndex >= 0);
-  assert.match(claude.args[denyIndex + 1], /Bash/);
-  assert.match(claude.args[denyIndex + 1], /Edit/);
-  assert.match(claude.args[denyIndex + 1], /Write/);
+test("every engine runs read-write by default; full-auto reaches the danger flags", () => {
+  // Claude: full tools, no deny list (no read-only tier anymore).
+  const claude = buildRunnerInvocation({ kind: "claude-code", toolsPolicy: "workspace-write" }, "/tmp/packet.md", "/repo");
+  const allowIdx = claude.args.indexOf("--allowedTools");
+  assert.match(claude.args[allowIdx + 1], /Edit/);
+  assert.match(claude.args[allowIdx + 1], /Bash/);
+  assert.equal(claude.args.includes("--disallowedTools"), false);
   // The CC-specific recursion/stomp guard: claude children skip plugin/hook/skill discovery.
   assert.ok(claude.args.includes("--bare"));
   assert.ok(claude.args.includes("--no-session-persistence"));
-  const claudeWrite = buildRunnerInvocation({ kind: "claude-code", toolsPolicy: "workspace-write" }, "/tmp/packet.md", "/repo");
-  assert.equal(claudeWrite.args.includes("--disallowedTools"), false);
-  assert.ok(claudeWrite.args.some((arg) => arg.includes("Edit") && arg.includes("Bash")));
+  const claudeAuto = buildRunnerInvocation({ kind: "claude-code", toolsPolicy: "full-auto" }, "/tmp/packet.md", "/repo");
+  assert.ok(claudeAuto.args.includes("--dangerously-skip-permissions"));
 
-  // OpenCode defaults to edit/bash "allow"; readonly must override via OPENCODE_PERMISSION.
-  const opencode = buildRunnerInvocation({ kind: "opencode", toolsPolicy: "readonly" }, "/tmp/packet.md", "/repo");
-  assert.deepEqual(JSON.parse(opencode.env.OPENCODE_PERMISSION), { edit: "deny", bash: "deny" });
-  const opencodeWrite = buildRunnerInvocation({ kind: "opencode", toolsPolicy: "workspace-write" }, "/tmp/packet.md", "/repo");
-  assert.equal(opencodeWrite.env?.OPENCODE_PERMISSION, undefined);
+  // Codex: workspace-write sandbox by default; full-auto bypasses it.
+  const codex = buildRunnerInvocation({ kind: "codex", toolsPolicy: "workspace-write" }, "/tmp/packet.md", "/repo");
+  assert.ok(codex.args.includes("workspace-write"));
+  const codexAuto = buildRunnerInvocation({ kind: "codex", toolsPolicy: "full-auto" }, "/tmp/packet.md", "/repo");
+  assert.ok(codexAuto.args.includes("--dangerously-bypass-approvals-and-sandbox"));
+
+  // OpenCode: no permission overlay (it uses its own edit/bash allow); full-auto skips permissions.
+  const opencode = buildRunnerInvocation({ kind: "opencode", toolsPolicy: "workspace-write" }, "/tmp/packet.md", "/repo");
+  assert.equal(opencode.env?.OPENCODE_PERMISSION, undefined);
+  const opencodeAuto = buildRunnerInvocation({ kind: "opencode", toolsPolicy: "full-auto" }, "/tmp/packet.md", "/repo");
+  assert.ok(opencodeAuto.args.includes("--dangerously-skip-permissions"));
 
   // Every engine child carries the nesting marker.
   for (const kind of ["pi", "claude-code", "codex", "opencode"]) {
-    const invocation = buildRunnerInvocation({ kind, toolsPolicy: "readonly" }, "/tmp/packet.md", "/repo");
+    const invocation = buildRunnerInvocation({ kind, toolsPolicy: "workspace-write" }, "/tmp/packet.md", "/repo");
     assert.equal(invocation.env?.CONSENSFLOW_CHILD, "1", `${kind}: CONSENSFLOW_CHILD`);
   }
 
   // Billing guard: participant runs ride the configured logins, not a stray env API key.
   assert.deepEqual(claude.dropEnv, ["ANTHROPIC_API_KEY"]);
-  const codex = buildRunnerInvocation({ kind: "codex", toolsPolicy: "readonly" }, "/tmp/packet.md", "/repo");
   assert.deepEqual(codex.dropEnv, ["OPENAI_API_KEY"]);
 });
 
 test("image participants are valid config but never reach the CLI runner (backstop)", () => {
   // Image generation is handled upstream in cf.mjs (Codex backend); the runner must throw loudly
   // if one ever slips through to the spawn path.
-  const participant = normalizeParticipant({ name: "Pygmalion", kind: "image", toolsPolicy: "readonly" });
+  const participant = normalizeParticipant({ name: "Pygmalion", kind: "image", toolsPolicy: "workspace-write" });
   assert.equal(participant.kind, "image");
   assert.throws(() => buildRunnerInvocation(participant, "/tmp/packet.md", "/repo"), /Codex backend/);
 });
@@ -320,44 +322,42 @@ test("effectiveTimeoutMs: per-call override wins over participant config; absent
   assert.equal(effectiveTimeoutMs({ timeoutMs: 900000 }, 0), 0);
 });
 
-test("toolsPolicy alone gates write access; a missing policy fails safe to readonly", () => {
+test("toolsPolicy defaults to workspace-write; explicit policies honored, readonly + bogus rejected", () => {
   // Explicit write policies are honored as configured.
   const builder = { id: "builder", name: "Builder", kind: "claude-code", toolsPolicy: "workspace-write" };
   assert.equal(effectiveToolsPolicy(builder), "workspace-write");
   assert.equal(participantForKind(builder, "ask").toolsPolicy, "workspace-write");
   assert.equal(effectiveToolsPolicy({ id: "auto", name: "Auto", kind: "codex", toolsPolicy: "full-auto" }), "full-auto");
 
-  // Explicit readonly stays readonly.
-  assert.equal(effectiveToolsPolicy({ id: "ro", name: "RO", kind: "pi", toolsPolicy: "readonly" }), "readonly");
-
-  // Fail safe: a missing policy is readonly, and participantForKind materializes it.
+  // A missing policy defaults to workspace-write (participants run as standard read-write CLI calls).
   const bare = { id: "bare", name: "Bare", kind: "codex" };
-  assert.equal(effectiveToolsPolicy(bare), "readonly");
-  assert.equal(participantForKind(bare, "ask").toolsPolicy, "readonly");
+  assert.equal(effectiveToolsPolicy(bare), "workspace-write");
+  assert.equal(participantForKind(bare, "ask").toolsPolicy, "workspace-write");
 
-  // normalizeParticipant defaults an omitted policy to readonly and rejects bogus values.
+  // normalizeParticipant defaults an omitted policy to workspace-write, and rejects readonly + bogus values.
   const p = normalizeParticipant({ name: "Y", kind: "codex" });
-  assert.equal(p.toolsPolicy, "readonly");
+  assert.equal(p.toolsPolicy, "workspace-write");
+  assert.throws(() => normalizeParticipant({ name: "Z", kind: "codex", toolsPolicy: "readonly" }), /toolsPolicy must be one of/);
   assert.throws(() => normalizeParticipant({ name: "X", kind: "codex", toolsPolicy: "bogus" }), /toolsPolicy must be one of/);
 });
 
-test("participantForKind honors an explicit per-call tools override (one participant, readonly or rw) [STRM-23]", () => {
-  const ro = { id: "ro", name: "RO", kind: "pi", toolsPolicy: "readonly" };
+test("participantForKind honors an explicit per-call tools override (one participant) [STRM-23]", () => {
+  const ws = { id: "ws", name: "WS", kind: "pi", toolsPolicy: "workspace-write" };
   // No override → the stored default is kept.
-  assert.equal(participantForKind(ro, "ask").toolsPolicy, "readonly");
-  assert.equal(participantForKind(ro, "ask", undefined).toolsPolicy, "readonly");
-  assert.equal(participantForKind(ro, "ask", "").toolsPolicy, "readonly");
-  // A valid override wins over the stored policy — raising or lowering.
-  assert.equal(participantForKind(ro, "ask", "workspace-write").toolsPolicy, "workspace-write");
-  assert.equal(participantForKind(ro, "ask", "full-auto").toolsPolicy, "full-auto");
-  const rw = { id: "rw", name: "RW", kind: "codex", toolsPolicy: "workspace-write" };
-  assert.equal(participantForKind(rw, "ask", "readonly").toolsPolicy, "readonly");
-  // No stored policy + no override → readonly default preserved.
-  assert.equal(participantForKind({ id: "bare", name: "B", kind: "codex" }, "ask").toolsPolicy, "readonly");
-  // An invalid override throws (never silently grants/keeps the wrong capability).
-  assert.throws(() => participantForKind(ro, "ask", "bogus"), /tools/i);
+  assert.equal(participantForKind(ws, "ask").toolsPolicy, "workspace-write");
+  assert.equal(participantForKind(ws, "ask", undefined).toolsPolicy, "workspace-write");
+  assert.equal(participantForKind(ws, "ask", "").toolsPolicy, "workspace-write");
+  // A valid override wins over the stored policy — escalating to full-auto.
+  assert.equal(participantForKind(ws, "ask", "full-auto").toolsPolicy, "full-auto");
+  const auto = { id: "auto", name: "Auto", kind: "codex", toolsPolicy: "full-auto" };
+  assert.equal(participantForKind(auto, "ask", "workspace-write").toolsPolicy, "workspace-write");
+  // No stored policy + no override → workspace-write default preserved.
+  assert.equal(participantForKind({ id: "bare", name: "B", kind: "codex" }, "ask").toolsPolicy, "workspace-write");
+  // An invalid override throws (readonly is gone; never silently grants the wrong capability).
+  assert.throws(() => participantForKind(ws, "ask", "readonly"), /tools/i);
+  assert.throws(() => participantForKind(ws, "ask", "bogus"), /tools/i);
   // The stored participant object is never mutated by an override.
-  assert.equal(ro.toolsPolicy, "readonly");
+  assert.equal(ws.toolsPolicy, "workspace-write");
 });
 
 test("participantsPath and artifact root live directly under the shared ConsensFlow home [STRM-27]", async () => {
@@ -379,13 +379,13 @@ test("legacy per-tool participant files migrate once when the shared root file i
     await mkdir(path.join(home, "consensflow-pi"), { recursive: true });
     await writeFile(
       path.join(home, "consensflow-pi", "participants.json"),
-      JSON.stringify({ schemaVersion: 1, participants: [{ id: "pi-only", name: "Pi Only", kind: "pi", toolsPolicy: "readonly" }] }),
+      JSON.stringify({ schemaVersion: 1, participants: [{ id: "pi-only", name: "Pi Only", kind: "pi", toolsPolicy: "workspace-write" }] }),
       "utf8",
     );
     await mkdir(path.join(home, "consensflow-cc"), { recursive: true });
     await writeFile(
       path.join(home, "consensflow-cc", "participants.json"),
-      JSON.stringify({ schemaVersion: 1, participants: [{ id: "cc-only", name: "CC Only", kind: "claude-code", toolsPolicy: "readonly" }] }),
+      JSON.stringify({ schemaVersion: 1, participants: [{ id: "cc-only", name: "CC Only", kind: "claude-code", toolsPolicy: "workspace-write" }] }),
       "utf8",
     );
 
@@ -397,7 +397,7 @@ test("legacy per-tool participant files migrate once when the shared root file i
     // After the shared file exists, legacy files are ignored; root remains authoritative.
     await writeFile(
       path.join(home, "consensflow-cc", "participants.json"),
-      JSON.stringify({ schemaVersion: 1, participants: [{ id: "ghost", name: "Ghost", kind: "codex", toolsPolicy: "readonly" }] }),
+      JSON.stringify({ schemaVersion: 1, participants: [{ id: "ghost", name: "Ghost", kind: "codex", toolsPolicy: "workspace-write" }] }),
       "utf8",
     );
     assert.equal(await getParticipant(cwd, "@ghost"), null);
@@ -412,7 +412,7 @@ test("runParticipant rejects participant cwd that escapes workspace before spawn
     await assert.rejects(
       runParticipant({
         cwd,
-        participant: { id: "bad", name: "Bad", kind: "pi", toolsPolicy: "readonly", cwd: "../outside" },
+        participant: { id: "bad", name: "Bad", kind: "pi", toolsPolicy: "workspace-write", cwd: "../outside" },
         packet: "# Packet",
         kind: "ask",
       }),
