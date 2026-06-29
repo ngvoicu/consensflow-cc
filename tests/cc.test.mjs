@@ -106,6 +106,21 @@ test("serializeClaudeTranscript caps bytes keeping the tail, and handles empty i
   assert.equal(serializeClaudeTranscript(null), "");
 });
 
+test("serializeClaudeTranscript honors the CONSENSFLOW_HANDOFF_MAX_BYTES env budget when no maxBytes is passed", () => {
+  // ~25 KB of entries: under the 48 KB default (no truncation), so the marker proves the env took effect.
+  const long = Array.from({ length: 50 }, () => userEntry("x".repeat(500)));
+  const prev = process.env.CONSENSFLOW_HANDOFF_MAX_BYTES;
+  try {
+    process.env.CONSENSFLOW_HANDOFF_MAX_BYTES = "2000";
+    const text = serializeClaudeTranscript(long); // no options -> env budget applies
+    assert.ok(Buffer.byteLength(text, "utf8") <= 2000);
+    assert.match(text, /\[earlier handoff truncated\]/);
+  } finally {
+    if (prev === undefined) delete process.env.CONSENSFLOW_HANDOFF_MAX_BYTES;
+    else process.env.CONSENSFLOW_HANDOFF_MAX_BYTES = prev;
+  }
+});
+
 test("parseTranscriptJsonl tolerates garbage lines and collectHandoff degrades to empty", async () => {
   const entries = parseTranscriptJsonl(`{"type":"user","message":{"role":"user","content":"hi"}}\nnot json\n\n{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"yo"}]}}`);
   assert.equal(entries.length, 2);
