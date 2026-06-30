@@ -233,12 +233,13 @@ async function handleRun(tokens, cwd) {
   const toolsOverride = parsed.flags.rw === true ? "workspace-write" : stringFlag(parsed.flags.tools);
   const effective = participantForKind(participant, "ask", toolsOverride);
   const packet = await createPacket({ cwd, participant: effective, kind: "ask", task: prompt, extraContext: stringFlag(parsed.flags.context), handoff });
-  // PRIMARY observability path: with --stream, render normalized events to stdout as they arrive,
-  // so the lead can relay the participant's thinking / tool calls / answer into this session
-  // (foreground-incremental). Suppressed under --json so streamed lines can't corrupt JSON.
+  // PRIMARY observability path: streaming is ALWAYS on — the thinking must stay visible, never run a
+  // participant without it (--stream/--no-stream are accepted but no longer gate this). Render
+  // normalized events to stdout as they arrive so the lead relays the thinking / tool calls / answer
+  // live. Suppressed ONLY under --json, where streamed lines would corrupt the machine output.
   let inDelta = false;
   let sawDelta = false;
-  const onEvent = parsed.flags.stream === true && parsed.flags.json !== true
+  const onEvent = parsed.flags.json !== true
     ? (event) => {
       if (event.kind === "delta") { process.stdout.write(event.text); inDelta = true; sawDelta = true; return; } // pi reasoning/text, flowing like its own UI
       // Once pi has streamed deltas, its message_end thinking/text blocks are redundant with what

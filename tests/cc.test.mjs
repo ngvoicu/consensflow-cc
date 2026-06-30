@@ -415,7 +415,7 @@ test("e2e: a timed-out run renders the partial trail under a timed-out header, n
   });
 });
 
-test("e2e: --stream renders live event lines; without it, just the clean final answer [STRM-17]", async () => {
+test("e2e: streaming is the default (thinking always visible); --json is the only quiet mode [STRM-17]", async () => {
   await withTempDir(async (dir) => {
     const ws = path.join(dir, "ws");
     await mkdir(ws, { recursive: true });
@@ -451,9 +451,13 @@ test("e2e: --stream renders live event lines; without it, just the clean final a
     assert.match(streamed.stdout, /# @luna/, "the final answer section is printed after the stream");
     assert.match((await latestPacket(ws, dir)).packet, /go check git diff --stat/, "unknown prompt flags are preserved");
 
+    // Streaming is the default — thinking/tools are ALWAYS visible. A run without --stream still
+    // streams; only --json suppresses the live trail (machine-readable output).
     const plain = await runCf(["run", "@luna", "go"], ctx);
-    assert.match(plain.stdout, /the streamed answer/, "the clean final answer");
-    assert.doesNotMatch(plain.stdout, /→ .*read|← .*read/, "no raw event lines without --stream");
+    assert.match(plain.stdout, /the streamed answer/, "the answer is present");
+    assert.match(plain.stdout, /→ .*read/, "event lines stream by default — no --stream flag needed");
+    const quiet = await runCf(["run", "@luna", "go", "--json"], ctx);
+    assert.doesNotMatch(quiet.stdout, /→ .*read|← .*read/, "--json is the only quiet mode");
 
     assert.equal((await runCf(["participants", "add", "--name", "PiOnly", "--kind", "pi", "--model", "fake"], ctx)).exitCode, 0);
     const fallback = await runCf(["run", "@pionly", "go", "--stream"], ctx);
