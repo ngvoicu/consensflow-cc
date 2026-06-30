@@ -236,10 +236,16 @@ async function handleRun(tokens, cwd) {
   // PRIMARY observability path: with --stream, render normalized events to stdout as they arrive,
   // so the lead can relay the participant's thinking / tool calls / answer into this session
   // (foreground-incremental). Suppressed under --json so streamed lines can't corrupt JSON.
+  let inDelta = false;
+  let sawDelta = false;
   const onEvent = parsed.flags.stream === true && parsed.flags.json !== true
     ? (event) => {
+      if (event.kind === "delta") { process.stdout.write(event.text); inDelta = true; sawDelta = true; return; } // pi reasoning/text, flowing like its own UI
+      // Once pi has streamed deltas, its message_end thinking/text blocks are redundant with what
+      // already flowed — skip them live (tool calls still render; the trail keeps them for timeouts).
+      if (sawDelta && (event.kind === "thinking" || event.kind === "text")) return;
       const line = renderEvent(event);
-      if (line) process.stdout.write(`${line}\n`);
+      if (line) { process.stdout.write(`${inDelta ? "\n" : ""}${line}\n`); inDelta = false; }
     }
     : undefined;
   const result = await runParticipant({ cwd, participant: effective, packet, kind: "ask", timeoutMs: parsed.flags["timeout-ms"] ?? parsed.flags.timeoutMs, onEvent });
