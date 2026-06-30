@@ -123,20 +123,16 @@ test("surfaceOutput: usable answer passes through; no answer → bounded trail u
     { kind: "tool_result", tool: "read", result: "file body" },
     { kind: "text", text: "partial answer so far" },
   ];
-  // Usable answer, no timeout → returned verbatim.
-  assert.equal(surfaceOutput("The answer is 42.", events, false), "The answer is 42.");
-  // Timed out but with a (partial) usable answer → answer under a timeout header.
-  const partial = surfaceOutput("partial answer so far", events, true);
-  assert.match(partial, /timed out/i);
-  assert.match(partial, /partial answer so far/);
-  // No usable answer (the opencode placeholder) + timeout → the bounded trail under the header.
-  const trail = surfaceOutput(OPENCODE_NO_ANSWER, events, true);
-  assert.match(trail, /timed out/i);
+  // Usable answer → returned verbatim.
+  assert.equal(surfaceOutput("The answer is 42.", events), "The answer is 42.");
+  // No usable answer (the opencode placeholder) → the bounded trail under the no-answer header.
+  const trail = surfaceOutput(OPENCODE_NO_ANSWER, events);
+  assert.match(trail, /no final answer/i);
   assert.match(trail, /read/, "tool call surfaced in the trail");
   assert.match(trail, /let me look/, "thinking surfaced in the trail");
   assert.doesNotMatch(trail, /"kind"|"type":|sessionID/, "never the raw JSONL stream");
-  // Empty answer, no timeout → a clear no-answer header + the trail.
-  const empty = surfaceOutput("", events, false);
+  // Empty answer → a clear no-answer header + the trail.
+  const empty = surfaceOutput("", events);
   assert.match(empty, /no final answer/i);
   assert.match(empty, /read/);
 });

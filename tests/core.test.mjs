@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { createPacket } from "../lib/packets.js";
 import { getPreset, listPresetIds, PARTICIPANT_PRESETS, participantFromPreset } from "../lib/presets.js";
-import { buildRunnerInvocation, codexSandbox, effectiveTimeoutMs, normalizeProcessOutput, runParticipant, spawnWithInput, toolsForPi } from "../lib/runners.js";
+import { buildRunnerInvocation, codexSandbox, normalizeProcessOutput, runParticipant, spawnWithInput, toolsForPi } from "../lib/runners.js";
 import { configRoot, getParticipant, loadParticipants, normalizeParticipant, participantsPath, removeParticipant, upsertParticipant } from "../lib/state.js";
 import { effectiveToolsPolicy, participantForKind } from "../lib/workflows.js";
 import { parseOptions, parseParticipantPrompt, resolveInside, slugify, tokenize } from "../lib/utils.js";
@@ -154,11 +154,10 @@ test("participant presets mirror consensflow-pi exactly (image preset included)"
   assert.equal(getPreset("euterpe").effort, "high");
   assert.equal(getPreset("linus").thinking, "high");
   assert.equal(getPreset("gunnlod").effort, "high");
-  const luna = participantFromPreset("luna", { cwd: "frontend", timeoutMs: 1234 });
+  const luna = participantFromPreset("luna", { cwd: "frontend" });
   assert.equal(luna.id, "luna");
   assert.equal(luna.name, "Luna");
   assert.equal(luna.cwd, "frontend");
-  assert.equal(luna.timeoutMs, 1234);
   assert.equal(participantFromPreset("custom"), null);
 });
 
@@ -312,16 +311,6 @@ test("spawnWithInput streams complete stdout lines via onStdoutLine: carry acros
     assert.equal(result.exitCode, 0);
     assert.equal(result.timedOut, false);
   });
-});
-
-test("effectiveTimeoutMs: per-call override wins over participant config; absent/non-positive means no timeout (0)", () => {
-  assert.equal(effectiveTimeoutMs({ timeoutMs: 900000 }, 1234), 1234);
-  assert.equal(effectiveTimeoutMs({ timeoutMs: 900000 }, undefined), 900000);
-  // No configured timeout → unbounded (0).
-  assert.equal(effectiveTimeoutMs({}, undefined), 0);
-  // An explicit 0 (per-call or per-participant) disables the timeout; the || chain used to swallow it.
-  assert.equal(effectiveTimeoutMs({ timeoutMs: 0 }, undefined), 0);
-  assert.equal(effectiveTimeoutMs({ timeoutMs: 900000 }, 0), 0);
 });
 
 test("toolsPolicy defaults to workspace-write; explicit policies honored, readonly + bogus rejected", () => {

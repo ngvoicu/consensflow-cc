@@ -23,7 +23,7 @@ import {
 } from "../lib/state.js";
 import { collectHandoff } from "../lib/transcript.js";
 import { createId, parseOptions, slugify } from "../lib/utils.js";
-import { effectiveTimeoutMs, runParticipant, spawnWithInput } from "../lib/runners.js";
+import { runParticipant, spawnWithInput } from "../lib/runners.js";
 import { renderEvent } from "../lib/transcript-events.js";
 import { createPacket } from "../lib/packets.js";
 import { effectiveToolsPolicy, participantForKind } from "../lib/workflows.js";
@@ -144,7 +144,7 @@ async function handleParticipants(tokens, cwd) {
     if (presetRef === "all") {
       // `--name`/`--id` would make every preset derive the same id and overwrite each other.
       // Only allow flags that apply uniformly to a bulk add.
-      assertAllowedFlags(parsed.flags, ["cwd", "timeoutMs", "description"], "preset add all");
+      assertAllowedFlags(parsed.flags, ["cwd", "description"], "preset add all");
       const participants = [];
       for (const presetId of listPresetIds()) {
         participants.push(await upsertParticipant(cwd, participantFromPreset(presetId, presetOverrides(parsed.flags))));
@@ -193,7 +193,7 @@ async function handleRun(tokens, cwd) {
   const positional = [...parsed.positional];
   const ref = positional.shift();
   if (!ref || !ref.startsWith("@")) {
-    throw new Error("Usage: /consensflow:cf @name <prompt> — or via the Bash tool: run @name <prompt> [--prompt-file <file>] [--context <note>] [--no-handoff] [--timeout-ms <ms>] [--json]");
+    throw new Error("Usage: /consensflow:cf @name <prompt> — or via the Bash tool: run @name <prompt> [--prompt-file <file>] [--context <note>] [--no-handoff] [--json]");
   }
   if (positional[0]?.startsWith("@")) {
     throw new Error("ConsensFlow sends to one participant at a time. Ask one, read its answer, then ask another.");
@@ -249,7 +249,7 @@ async function handleRun(tokens, cwd) {
       if (line) { process.stdout.write(`${inDelta ? "\n" : ""}${line}\n`); inDelta = false; }
     }
     : undefined;
-  const result = await runParticipant({ cwd, participant: effective, packet, kind: "ask", timeoutMs: parsed.flags["timeout-ms"] ?? parsed.flags.timeoutMs, onEvent });
+  const result = await runParticipant({ cwd, participant: effective, packet, kind: "ask", onEvent });
   result.handoffSummary = handoffSummary;
 
   if (inDelta) process.stdout.write("\n"); // a trailing pi reasoning delta shouldn't butt against the final answer header
@@ -266,7 +266,7 @@ async function handleRun(tokens, cwd) {
 export function parseRunOptions(tokens) {
   const positional = [];
   const flags = {};
-  const valueFlags = new Set(["tools", "toolsPolicy", "context", "timeout-ms", "timeoutMs", "prompt", "prompt-file", "handoff-file", "image"]);
+  const valueFlags = new Set(["tools", "toolsPolicy", "context", "prompt", "prompt-file", "handoff-file", "image"]);
   const booleanFlags = new Set(["stream", "no-stream", "json", "rw", "handoff", "no-handoff"]);
   // Repeatable flags collect into an array: `--image a.png --image b.png` → ["a.png", "b.png"].
   const multiValueFlags = new Set(["image"]);
@@ -316,12 +316,11 @@ async function runImageParticipant(cwd, participant, prompt, flags) {
   const runDir = path.join(runsRoot(cwd), runId);
   await fs.mkdir(runDir, { recursive: true });
   const triggerModel = participant.model || IMAGE_TRIGGER_DEFAULT;
-  const timeoutMs = effectiveTimeoutMs(participant, flags["timeout-ms"]);
   // Optional reference images (`--image <path>`, repeatable) become input_image parts so gpt-image-2
   // can edit/condition on them. Paths are read as given (relative to cwd, like --prompt-file).
   const imagePaths = Array.isArray(flags.image) ? flags.image : flags.image ? [flags.image] : [];
   const images = await Promise.all(imagePaths.map((p) => imageFileToDataUrl(p)));
-  const image = await generateImage({ token, accountId, prompt, triggerModel, images, signal: timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined });
+  const image = await generateImage({ token, accountId, prompt, triggerModel, images });
   const savedPath = await saveImagePng(image.base64, runDir, "image.png");
   const result = {
     schemaVersion: 1,
@@ -365,8 +364,8 @@ function flagBool(flags, name) {
   return undefined;
 }
 
-const PRESET_OVERRIDE_FLAGS = ["name", "id", "cwd", "timeoutMs", "description"];
-const CUSTOM_ADD_FLAGS = ["name", "id", "kind", "model", "provider", "effort", "thinking", "tools", "toolsPolicy", "skills", "skillsPolicy", "agent", "cwd", "timeoutMs", "maxTurns", "description"];
+const PRESET_OVERRIDE_FLAGS = ["name", "id", "cwd", "description"];
+const CUSTOM_ADD_FLAGS = ["name", "id", "kind", "model", "provider", "effort", "thinking", "tools", "toolsPolicy", "skills", "skillsPolicy", "agent", "cwd", "maxTurns", "description"];
 const CUSTOM_SHAPE_FLAGS = ["kind", "model", "provider", "effort", "thinking", "tools", "toolsPolicy", "skills", "skillsPolicy", "agent", "maxTurns"];
 
 function assertAllowedFlags(flags, allowed, context) {
@@ -388,7 +387,7 @@ function stringFlag(value) {
 }
 
 function presetOverrides(flags) {
-  return { name: flags.name, id: flags.id, cwd: flags.cwd, timeoutMs: flags.timeoutMs, description: flags.description };
+  return { name: flags.name, id: flags.id, cwd: flags.cwd, description: flags.description };
 }
 
 function customParticipantInput(name, flags) {
@@ -404,7 +403,6 @@ function customParticipantInput(name, flags) {
     skillsPolicy: flags.skills ?? flags.skillsPolicy,
     agent: flags.agent,
     cwd: flags.cwd,
-    timeoutMs: flags.timeoutMs,
     maxTurns: flags.maxTurns,
     description: flags.description,
   };
@@ -461,11 +459,7 @@ function formatParticipantLine(p) {
 // nudge always shows. Full metadata stays in result.json (and `--json`).
 function renderRunResult(result) {
   const lines = [`# @${result.participant.id}`];
-  if (result.timedOut) {
-    // A timeout is not a failure with a meaningful exit code — the partial trail below is the
-    // real signal. Don't print "exit 0", which reads as success.
-    lines.push("", `(timed out — partial output below; artifacts: ${result.runDir})`);
-  } else if (result.exitCode !== 0) {
+  if (result.exitCode !== 0) {
     lines.push("", `Run failed: exit ${result.exitCode} — artifacts: ${result.runDir}`);
   }
   if (result.handoffSummary?.startsWith("empty")) lines.push("", `Handoff: ${result.handoffSummary}`);
@@ -506,7 +500,7 @@ Manage participants (shared across Claude Code and Pi, ${participantsPath(proces
 For the lead (via the Bash tool), the CLI subcommands are \`status\` | \`doctor\` |
 \`participants list|presets|add|show|remove\` | \`run @name <prompt>\`, with run flags
 \`--tools workspace-write|full-auto\` | \`--prompt <text>\` |
-\`--prompt-file <file>\` | \`--context <note>\` | \`--no-handoff\` | \`--timeout-ms <ms>\` | \`--image <path>\` (image participants) | \`--json\`.
+\`--prompt-file <file>\` | \`--context <note>\` | \`--no-handoff\` | \`--image <path>\` (image participants) | \`--json\`.
 
 Rules:
 

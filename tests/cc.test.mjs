@@ -385,35 +385,6 @@ test("e2e: all four engines run, parse, and persist artifacts through the real s
   });
 });
 
-test("e2e: a timed-out run renders the partial trail under a timed-out header, not an exit-0 failure [STRM-15]", async () => {
-  await withTempDir(async (dir) => {
-    const ws = path.join(dir, "ws");
-    await mkdir(ws, { recursive: true });
-    const bin = path.join(dir, "fakebin");
-    await mkdir(bin, { recursive: true });
-    // A fake opencode that emits a real-shaped tool_use + a text part, then HANGS until SIGTERM —
-    // forcing a timeout with partial output already captured.
-    const shim = [
-      "#!/usr/bin/env node",
-      `console.log(JSON.stringify({ type: "tool_use", part: { type: "tool", tool: "read", state: { input: { path: "x.txt" }, output: "file body" } } }));`,
-      `console.log(JSON.stringify({ type: "text", part: { text: "partial answer before the hang" } }));`,
-      "setInterval(() => {}, 1000);",
-    ].join("\n");
-    const shimPath = path.join(bin, "opencode");
-    await writeFile(shimPath, shim, "utf8");
-    await chmod(shimPath, 0o755);
-    const ctx = { ws, dir, fake: { bin, out: dir } };
-
-    await runCf(["participants", "add", "luna"], ctx);
-    const run = await runCf(["run", "@luna", "--timeout-ms", "1200", "summarize the file"], ctx);
-
-    assert.match(run.stdout, /timed out/i, "the run is marked as timed out");
-    assert.match(run.stdout, /partial answer before the hang/, "the partial answer is surfaced");
-    assert.match(run.stdout, /read/, "the tool call appears in the trail or partial output");
-    assert.doesNotMatch(run.stdout, /Run failed: exit 0/, "a timeout is not mislabeled as an exit-0 failure");
-  });
-});
-
 test("e2e: streaming is the default (thinking always visible); --json is the only quiet mode [STRM-17]", async () => {
   await withTempDir(async (dir) => {
     const ws = path.join(dir, "ws");

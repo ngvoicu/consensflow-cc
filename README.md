@@ -131,7 +131,7 @@ The answer is relayed inline. Every run is saved under the ConsensFlow home — 
   transcript.md  # human-readable thinking / tool calls / answer — the durability backstop
 ```
 
-**Watch it work live:** routed `@name` prompts and explicit `/consensflow:cf` participant runs always run in the foreground, and the participant's thinking, tool calls, and answer render to stdout as they arrive — the live reasoning/tool/answer trail streams automatically (no flag needed). Always run participant calls in the FOREGROUND, NEVER in the background or detached; this is non-optional — the lead must not detach the run or summarize the trail away (the one exception is an explicit user request for `--json` machine output). If you invoke the CLI manually (`cf run @name <prompt>`), keep the run in the foreground; streaming is on by default either way. The parsed final answer is always printed after the child exits too, so runs end with a durable reply section, and every run writes `transcript.md` as a durability backstop. On a timeout you get the partial trail under a clear header — never a raw event dump.
+**Watch it work live:** routed `@name` prompts and explicit `/consensflow:cf` participant runs always run in the foreground, and the participant's thinking, tool calls, and answer render to stdout as they arrive — the live reasoning/tool/answer trail streams automatically (no flag needed). Always run participant calls in the FOREGROUND, NEVER in the background or detached; this is non-optional — the lead must not detach the run or summarize the trail away (the one exception is an explicit user request for `--json` machine output). If you invoke the CLI manually (`cf run @name <prompt>`), keep the run in the foreground; streaming is on by default either way. The parsed final answer is always printed after the child exits too, so runs end with a durable reply section, and every run writes `transcript.md` as a durability backstop. If a run ends without a final answer you get the bounded trail under a clear header — never a raw event dump. cf never caps a run — runs are unbounded; the only limit is the lead's Bash tool timeout.
 
 Since a consult can modify files, review what changed yourself (e.g. `git status` / `git diff` in your repo) before keeping it — the lead decides whether to keep or build on a participant's changes. **Per-call escalation:** add `--tools full-auto` to lift the workspace confinement on only that run — no second roster entry needed.
 
@@ -183,7 +183,7 @@ cf status                        # participants + session stash + latest run
 cf doctor                        # which engine CLIs are installed
 cf participants presets|list|show @name|remove @name
 cf participants add <preset>|all|--name … --kind … --model …
-cf run @name <prompt> [--tools workspace-write|full-auto] [--prompt-file f] [--context note] [--no-handoff] [--timeout-ms n] [--json]
+cf run @name <prompt> [--tools workspace-write|full-auto] [--prompt-file f] [--context note] [--no-handoff] [--json]
 #   flags may go before or after the prompt; the live reasoning/tool/answer trail streams automatically (no flag needed)
 #   runs are workspace-write by default; --tools full-auto escalates (bypasses sandbox/approval)
 ```

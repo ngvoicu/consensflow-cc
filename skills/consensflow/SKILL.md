@@ -17,7 +17,7 @@ Use participants for all of these, one participant at a time. No preset is intri
 
 ## How to run it
 
-Everything the Claude Code lead does goes through the bundled CLI via the Bash tool. Use a generous Bash timeout for frontier models (often `600000` ms or more).
+Everything the Claude Code lead does goes through the bundled CLI via the Bash tool. ConsensFlow never caps a run itself (runs are unbounded) — the only limit is your Bash tool timeout, so use a generous one for frontier models (often `600000` ms or more).
 
 ```bash
 # Ask one participant (read-write by default) in the foreground; the live trail streams automatically
@@ -50,7 +50,6 @@ Important run flags (flags may appear before or after the prompt/ref; `--prompt-
 - `--context <note>` — focused lead brief in addition to the auto-included handoff.
 - `--no-handoff` — skip the session handoff.
 - `--tools workspace-write|full-auto` — `workspace-write` is the default; `full-auto` bypasses the engine's sandbox/approval checks (danger). Does not mutate the roster.
-- `--timeout-ms <ms>` — per-call timeout override.
 - `--image <path>` — reference image for an `image` participant; repeatable for multiple references. Ignored by text participants.
 - `--json` — print full run metadata instead of just the human answer.
 
@@ -131,12 +130,12 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" status
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" doctor
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants list
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants presets
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add <preset> [--name <name>] [--cwd <subdir>] [--timeoutMs <ms>]
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add <preset> [--name <name>] [--cwd <subdir>]
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add all
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>|--thinking <t>] [--tools workspace-write|full-auto] [--cwd <subdir>]
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants show @name
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants remove @name
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @name <prompt> [--tools workspace-write|full-auto] [--prompt-file <file>] [--context <note>] [--no-handoff] [--timeout-ms <ms>] [--image <path> …] [--json]
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @name <prompt> [--tools workspace-write|full-auto] [--prompt-file <file>] [--context <note>] [--no-handoff] [--image <path> …] [--json]
 ```
 
 User-facing slash commands are thin wrappers around that CLI: `/consensflow:cf`, `/consensflow:status`, `/consensflow:doctor`, `/consensflow:presets`, and `/consensflow:participants …`.
