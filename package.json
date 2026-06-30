@@ -1,6 +1,6 @@
 {
   "name": "consensflow-cc",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "private": true,
   "description": "Claude Code-native one-at-a-time named-agent prompt routing (a Claude Code plugin).",
   "type": "module",

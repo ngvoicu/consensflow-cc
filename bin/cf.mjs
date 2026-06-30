@@ -230,7 +230,7 @@ async function handleRun(tokens, cwd) {
   // Per-call tools override: `--rw` is shorthand for workspace-write, or `--tools <policy>` for an
   // exact policy. The stored policy is the default; an explicit flag makes this one run write-capable
   // without a second roster entry. An invalid --tools value throws (validated downstream).
-  const toolsOverride = parsed.flags.rw === true ? "workspace-write" : stringFlag(parsed.flags.tools);
+  const toolsOverride = parsed.flags.rw === true ? "workspace-write" : stringFlag(parsed.flags.tools ?? parsed.flags.toolsPolicy);
   const effective = participantForKind(participant, "ask", toolsOverride);
   const packet = await createPacket({ cwd, participant: effective, kind: "ask", task: prompt, extraContext: stringFlag(parsed.flags.context), handoff });
   // PRIMARY observability path: streaming is ALWAYS on — the thinking must stay visible, never run a
@@ -252,6 +252,7 @@ async function handleRun(tokens, cwd) {
   const result = await runParticipant({ cwd, participant: effective, packet, kind: "ask", timeoutMs: parsed.flags["timeout-ms"] ?? parsed.flags.timeoutMs, onEvent });
   result.handoffSummary = handoffSummary;
 
+  if (inDelta) process.stdout.write("\n"); // a trailing pi reasoning delta shouldn't butt against the final answer header
   if (parsed.flags.json === true) {
     console.log(JSON.stringify(result, null, 2));
     return;
@@ -266,7 +267,7 @@ export function parseRunOptions(tokens) {
   const positional = [];
   const flags = {};
   const valueFlags = new Set(["tools", "toolsPolicy", "context", "timeout-ms", "timeoutMs", "prompt", "prompt-file", "handoff-file", "image"]);
-  const booleanFlags = new Set(["stream", "json", "rw", "handoff", "no-handoff"]);
+  const booleanFlags = new Set(["stream", "no-stream", "json", "rw", "handoff", "no-handoff"]);
   // Repeatable flags collect into an array: `--image a.png --image b.png` → ["a.png", "b.png"].
   const multiValueFlags = new Set(["image"]);
   const setValue = (name, value) => {
