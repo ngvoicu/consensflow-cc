@@ -101,7 +101,7 @@ Or fully custom (any model string the engine accepts — values pass through ver
 /consensflow:participants add --name Builder --kind opencode --model openrouter/moonshotai/kimi-k2.7-code --tools workspace-write
 ```
 
-> **Default vs full-auto.** By default a participant runs read-write, confined to the project workspace (`workspace-write`) — it can read, plan, critique, edit files, and run commands, just like running the agent yourself. To remove that confinement and bypass the engine's sandbox/approval checks, pass `--tools full-auto` when creating it, or use it on a single run. (`--rw` is still accepted but redundant — it just equals the default.)
+> **Default vs full-auto.** By default a participant runs read-write, confined to the project workspace (`workspace-write`) — it can read, plan, critique, edit files, and run commands, just like running the agent yourself. To remove that confinement and bypass the engine's sandbox/approval checks, pass `--tools full-auto` when creating it, or use it on a single run.
 
 Config lives in the **shared** roster `~/.consensflow/participants.json` — used by both consensflow-cc and consensflow-pi, so a participant added in one is immediately available in the other. There are no per-tool config roots. If this shared file is missing but an older per-tool roster exists at `~/.consensflow/consensflow-cc/participants.json` or `~/.consensflow/consensflow-pi/participants.json`, ConsensFlow migrates those entries into the shared file once.
 
@@ -131,7 +131,7 @@ The answer is relayed inline. Every run is saved under the ConsensFlow home — 
   transcript.md  # human-readable thinking / tool calls / answer — the durability backstop
 ```
 
-**Watch it work live:** routed `@name` prompts and explicit `/consensflow:cf` participant runs always use `--stream` in the foreground, so the participant's thinking, tool calls, and answer render to stdout as they arrive — the lead must not drop `--stream`, detach the run, or summarize the trail away (the one exception is an explicit user request for `--json`). If you invoke the CLI manually, add `--stream` (`cf run @name <prompt> --stream`) and keep the run in the foreground. The parsed final answer is always printed after the child exits too, so streamed runs end with a durable reply section. Without `--stream` you get just the clean final answer; either way the run writes `transcript.md` as a durability backstop. On a timeout you get the partial trail under a clear header — never a raw event dump.
+**Watch it work live:** routed `@name` prompts and explicit `/consensflow:cf` participant runs always run in the foreground, and the participant's thinking, tool calls, and answer render to stdout as they arrive — the live reasoning/tool/answer trail streams automatically (no flag needed). Always run participant calls in the FOREGROUND, NEVER in the background or detached; this is non-optional — the lead must not detach the run or summarize the trail away (the one exception is an explicit user request for `--json` machine output). If you invoke the CLI manually (`cf run @name <prompt>`), keep the run in the foreground; streaming is on by default either way. The parsed final answer is always printed after the child exits too, so runs end with a durable reply section, and every run writes `transcript.md` as a durability backstop. On a timeout you get the partial trail under a clear header — never a raw event dump.
 
 Since a consult can modify files, review what changed yourself (e.g. `git status` / `git diff` in your repo) before keeping it — the lead decides whether to keep or build on a participant's changes. **Per-call escalation:** add `--tools full-auto` to lift the workspace confinement on only that run — no second roster entry needed.
 
@@ -183,9 +183,9 @@ cf status                        # participants + session stash + latest run
 cf doctor                        # which engine CLIs are installed
 cf participants presets|list|show @name|remove @name
 cf participants add <preset>|all|--name … --kind … --model …
-cf run @name <prompt> [--stream] [--tools workspace-write|full-auto] [--prompt-file f] [--context note] [--no-handoff] [--timeout-ms n] [--json]
-#   flags may go before or after the prompt; --stream streams events live
-#   runs are workspace-write by default; --tools full-auto escalates (bypasses sandbox/approval); --rw is accepted but redundant
+cf run @name <prompt> [--tools workspace-write|full-auto] [--prompt-file f] [--context note] [--no-handoff] [--timeout-ms n] [--json]
+#   flags may go before or after the prompt; the live reasoning/tool/answer trail streams automatically (no flag needed)
+#   runs are workspace-write by default; --tools full-auto escalates (bypasses sandbox/approval)
 ```
 
 ## Safety model

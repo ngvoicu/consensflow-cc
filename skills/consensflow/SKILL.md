@@ -20,8 +20,8 @@ Use participants for all of these, one participant at a time. No preset is intri
 Everything the Claude Code lead does goes through the bundled CLI via the Bash tool. Use a generous Bash timeout for frontier models (often `600000` ms or more).
 
 ```bash
-# Ask one participant (read-write by default) and stream its trail in the foreground
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "What's the riskiest part of this design?" --stream
+# Ask one participant (read-write by default) in the foreground; the live trail streams automatically
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "What's the riskiest part of this design?"
 
 # Add a focused brief on top of the automatic session handoff
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "Review the auth flow" --context "Focus on rollback and token expiry"
@@ -29,8 +29,8 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "Review the auth flow" --conte
 # Use a prompt file when the hook stashes a user @mention, or when the prompt is large
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus --prompt-file question.md
 
-# Stream normalized thinking / tool / answer events live; the parsed final answer is printed at the end too
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "Review this diff" --stream
+# Normalized thinking / tool / answer events stream live automatically; the parsed final answer is printed at the end too
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "Review this diff"
 
 # Write is the default — no flag needed; the approval gate still applies afterward
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @builder "Make the minimal fix"
@@ -43,12 +43,12 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @pygmalion "A watercolor of this hou
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @pygmalion "Blend these into one scene" --image a.png --image b.jpg
 ```
 
+Always run participant calls in the FOREGROUND, NEVER in the background; the live reasoning/tool/answer trail streams automatically — the only exception is an explicit `--json` for machine output.
+
 Important run flags (flags may appear before or after the prompt/ref; `--prompt-file` may stand in for the prompt):
 
 - `--context <note>` — focused lead brief in addition to the auto-included handoff.
 - `--no-handoff` — skip the session handoff.
-- `--stream` — render live normalized events as the child works, then print the parsed final answer again after the child exits. **Always pass it, in the foreground, for participant runs** — never drop it, detach the run, or substitute `--json` to hide the trail. The only exception is an explicit user request for JSON output.
-- `--rw` — still accepted but now redundant; it just equals the default workspace-write.
 - `--tools workspace-write|full-auto` — `workspace-write` is the default; `full-auto` bypasses the engine's sandbox/approval checks (danger). Does not mutate the roster.
 - `--timeout-ms <ms>` — per-call timeout override.
 - `--image <path>` — reference image for an `image` participant; repeatable for multiple references. Ignored by text participants.
@@ -136,7 +136,7 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add all
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>|--thinking <t>] [--tools workspace-write|full-auto] [--cwd <subdir>]
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants show @name
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants remove @name
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @name <prompt> [--stream] [--rw|--tools workspace-write|full-auto] [--prompt-file <file>] [--context <note>] [--no-handoff] [--timeout-ms <ms>] [--image <path> …] [--json]
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @name <prompt> [--tools workspace-write|full-auto] [--prompt-file <file>] [--context <note>] [--no-handoff] [--timeout-ms <ms>] [--image <path> …] [--json]
 ```
 
 User-facing slash commands are thin wrappers around that CLI: `/consensflow:cf`, `/consensflow:status`, `/consensflow:doctor`, `/consensflow:presets`, and `/consensflow:participants …`.
@@ -144,7 +144,7 @@ User-facing slash commands are thin wrappers around that CLI: `/consensflow:cf`,
 ## Tools policy: read-write by default, full-auto is the escalation
 
 - **Default and presets:** read-write, confined to the project workspace (`workspace-write`). Participants can read, plan, critique, explain, propose code, edit files, and run commands — exactly like running the CLI yourself.
-- **`--rw` / `--tools workspace-write`:** redundant; both just restate the default. No flag is needed to let a participant write.
+- **`--tools workspace-write`:** redundant; it just restates the default. No flag is needed to let a participant write.
 - **`--tools full-auto` (danger):** the only real escalation. It bypasses the engine's sandbox and approval checks, so the participant is no longer confined to the workspace. Use it only when explicitly needed, and make it obvious in the command history.
 - **After any run:** run your own inspection (`git status`, `git diff`, relevant tests as needed), summarize what the participant changed, give your recommendation, and wait for user approval before keeping/building on/committing the changes unless the user pre-authorized that exact action.
 
@@ -157,7 +157,7 @@ When the user's prompt addresses one configured participant — `@zeus What's th
 - **One at a time.** Send to exactly one participant per call. Never fan out to several participants automatically. If the user names several, ask which one first, or ask one and wait for its answer before asking the next.
 - **Read-write by default.** A participant runs with read-write tools confined to the project workspace — it can edit files and run commands with no extra flag. `--tools full-auto` is the only escalation; it bypasses the engine's sandbox/approval checks.
 - **One-shot, no memory.** Each call is fresh. Continuity comes only from the handoff (re-sent each time), which already includes earlier participant replies — so a later participant can build on an earlier one (cross-pollination). For a genuinely *independent* opinion, ask that participant **first**, before others have replied — otherwise its handoff carries the prior answers and colors it.
-- **Foreground streaming is non-optional.** Every routed participant run passes `--stream` and stays in the foreground; the lead must not background/detach it, swap it for `--json`, or summarize the streamed trail away. The one exception is an explicit user request for JSON output.
+- **Foreground is non-optional.** Always run participant calls in the FOREGROUND, NEVER in the background or detached; the live reasoning/tool/answer trail streams automatically (no flag needed). The lead must not swap it for `--json` or summarize the streamed trail away. The one exception is an explicit user request for JSON output.
 - **The lead is always the decision-maker.** ConsensFlow routes a prompt and returns an answer; it never implements anything on its own. Acting on any answer goes through the gate above.
 - **No automatic git context.** Participants receive only the handoff and the prompt — paste a diff or name the files when you want them assessed or changed.
 - **No hidden workflows.** Do not assume ceremonies like spec review, implementation review, council, grill, or handoff-by-name. The skill routes one prompt to one participant; that is all.

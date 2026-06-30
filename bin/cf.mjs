@@ -256,7 +256,7 @@ async function handleRun(tokens, cwd) {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
-  // Always print the parsed final result after the child exits, even with --stream. Some engine
+  // Always print the parsed final result after the child exits, even while streaming. Some engine
   // streams omit answer text until the terminal summary. This mirrors Pi: live crumbs are
   // best-effort; the final reply is durable.
   console.log(renderRunResult(result));
@@ -504,7 +504,7 @@ Manage participants (shared across Claude Code and Pi, ${participantsPath(proces
 
 For the lead (via the Bash tool), the CLI subcommands are \`status\` | \`doctor\` |
 \`participants list|presets|add|show|remove\` | \`run @name <prompt>\`, with run flags
-\`--stream\` | \`--rw\` | \`--tools workspace-write|full-auto\` | \`--prompt <text>\` |
+\`--tools workspace-write|full-auto\` | \`--prompt <text>\` |
 \`--prompt-file <file>\` | \`--context <note>\` | \`--no-handoff\` | \`--timeout-ms <ms>\` | \`--image <path>\` (image participants) | \`--json\`.
 
 Rules:

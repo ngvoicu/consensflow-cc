@@ -587,15 +587,14 @@ test("docs describe the stream-first observability surface, transcript backstop,
   const agents = await readFile(new URL("../AGENTS.md", import.meta.url), "utf8");
   const docs = `${readme}\n${agents}`;
   // Stream-first observability surface (primary), foreground-incremental.
-  assert.match(docs, /--stream/, "docs mention the --stream surface");
-  assert.match(docs, /foreground/i, "docs note --stream is foreground-incremental");
-  assert.doesNotMatch(docs, /background/i, "docs do not preserve background-run guidance");
+  assert.match(docs, /stream/i, "docs describe the automatic live stream");
+  assert.match(docs, /foreground/i, "docs note runs are foreground");
+  assert.match(docs, /never .*background/i, "docs forbid background runs (a tool property)");
   assert.match(docs, /non-optional/i, "docs lock foreground streaming as non-optional");
   // Durability backstop + the new parity-locked event module.
   assert.match(docs, /transcript\.md/, "docs mention the transcript.md backstop");
   assert.match(docs, /transcript-events\.js/, "docs mention the parity-locked event module");
-  // The two config additions.
-  assert.match(docs, /--rw/, "docs mention the per-call --rw override");
+  // The shared cross-tool roster (--rw is gone: it's a redundant no-op, workspace-write is the default).
   assert.match(docs, /shared/i, "docs mention the shared cross-tool roster");
   // The runners.js mirrored-with-deltas convention.
   assert.match(agents, /mirror/i, "AGENTS.md documents the runners.js mirrored-with-deltas convention");

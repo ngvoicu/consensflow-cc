@@ -47,9 +47,9 @@ try {
     [
       `ConsensFlow routing: this prompt addresses the participant @${id}. Consult it now via the Bash tool:`,
       "",
-      `  node "${CLI_PATH}" run @${id} --prompt-file "${promptFile}" --stream`,
+      `  node "${CLI_PATH}" run @${id} --prompt-file "${promptFile}"`,
       "",
-      "Participants can take minutes: always run this in the foreground and keep --stream on, with a generous Bash timeout (600000 ms or more), so the user sees the live thinking/tool/answer trail as it arrives. Never drop --stream, detach the run, or switch to --json to hide it. Then relay the participant's answer to the user faithfully — do not summarize the trail away.",
+      "Participants can take minutes: always run this in the FOREGROUND — NEVER in the background or detached — with a generous Bash timeout (600000 ms or more). It streams the live thinking/tool/answer trail automatically (no flag needed), so the user sees the reasoning as it arrives; never switch to --json to hide the trail. Then relay the participant's answer to the user faithfully — do not summarize the trail away.",
       "Do not apply, commit, or keep the participant's advice or file changes without the user's approval, unless the user already authorized it.",
     ].join("\n"),
   );
