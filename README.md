@@ -192,7 +192,7 @@ cf run @name <prompt> [--tools workspace-write|full-auto] [--prompt-file f] [--c
 
 - **Isolated & one-shot:** each participant runs in its own subprocess, started in your workspace (a `--cwd` that escapes it is rejected before launch, realpath-checked). No memory between calls.
 - **Workspace confinement by default:** participants run with the engine's `workspace-write` policy — read, edit, and run commands, but scoped to the project workspace. `--tools full-auto` is the only escalation and lifts that confinement, bypassing the engine's sandbox/approval checks; use it deliberately.
-- **No recursion:** every child gets `CONSENSFLOW_CHILD=1` (hooks and the CLI bail inside it), and `claude` children run `--bare` so they don't load this plugin at all. Pi children run `--no-extensions`.
+- **No recursion:** every child gets `CONSENSFLOW_CHILD=1` — hooks and the CLI bail inside it, so a `claude` child that loads this plugin does nothing with it. Pi children run `--no-extensions`. (`--bare` is deliberately not used on claude children: it forbids OAuth/keychain auth and would break subscription-login participants.)
 - **Billing guard:** `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` are stripped from claude/codex children so runs stay on your subscription logins.
 - **You're always the lead.** ConsensFlow routes your question and shows you the answer — Claude summarizes and asks before applying anything, unless you've already told it to proceed.
 

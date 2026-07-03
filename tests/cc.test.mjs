@@ -368,7 +368,7 @@ test("e2e: all four engines run, parse, and persist artifacts through the real s
 
     // Engine-specific guards observed from inside the children.
     const claude = JSON.parse(await readFile(path.join(fake.out, "claude.json"), "utf8"));
-    assert.ok(claude.argv.includes("--bare"), "claude child skips plugin/hook discovery");
+    assert.ok(!claude.argv.includes("--bare"), "claude child must NOT run --bare: it forbids OAuth/keychain auth while ANTHROPIC_API_KEY is stripped (1.5.1 regression guard); recursion is covered by CONSENSFLOW_CHILD");
     assert.equal(claude.argv.includes("--disallowedTools"), false, "no claude deny list");
     assert.equal(claude.argv[claude.argv.indexOf("--model") + 1], "claude-opus-4-8");
     assert.equal(claude.argv[claude.argv.indexOf("--effort") + 1], "max");

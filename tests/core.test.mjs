@@ -184,7 +184,7 @@ test("every preset survives normalize + runner invocation with correct flags (al
     if (preset.kind === "claude-code") {
       assert.equal(invocation.args[invocation.args.indexOf("--effort") + 1], preset.effort, `${preset.preset}: claude effort`);
       assert.equal(invocation.args.includes("--disallowedTools"), false, `${preset.preset}: no claude deny list`);
-      assert.ok(invocation.args.includes("--bare"), `${preset.preset}: claude children skip plugin/hook discovery`);
+      assert.ok(!invocation.args.includes("--bare"), `${preset.preset}: --bare must NOT be passed (blocks OAuth/keychain auth; CONSENSFLOW_CHILD is the recursion guard)`);
     }
     if (preset.kind === "codex") {
       assert.ok(invocation.args.includes(`model_reasoning_effort=\"${preset.effort}\"`), `${preset.preset}: codex effort`);
@@ -230,8 +230,9 @@ test("every engine runs read-write by default; full-auto reaches the danger flag
   assert.match(claude.args[allowIdx + 1], /Edit/);
   assert.match(claude.args[allowIdx + 1], /Bash/);
   assert.equal(claude.args.includes("--disallowedTools"), false);
-  // The CC-specific recursion/stomp guard: claude children skip plugin/hook/skill discovery.
-  assert.ok(claude.args.includes("--bare"));
+  // Regression guard (1.5.1): --bare forbids OAuth/keychain auth while ANTHROPIC_API_KEY is
+  // stripped -> "Not logged in". Recursion/stomp is guarded by CONSENSFLOW_CHILD alone.
+  assert.ok(!claude.args.includes("--bare"));
   assert.ok(claude.args.includes("--no-session-persistence"));
   const claudeAuto = buildRunnerInvocation({ kind: "claude-code", toolsPolicy: "full-auto" }, "/tmp/packet.md", "/repo");
   assert.ok(claudeAuto.args.includes("--dangerously-skip-permissions"));
