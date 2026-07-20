@@ -107,12 +107,13 @@ test("createPacket gives write-capable participants a read-write mode line", asy
 test("participant presets mirror consensflow-pi exactly (image preset included)", () => {
   assert.deepEqual(listPresetIds(), [
     "calliope", "clio", "euterpe", "thalia",
+    "hyperion", "phoebus", "gaia", "diana",
     "zeus", "apollo", "artemis", "athena", "perseus", "iris", "hermes", "eos", "luna",
     "orpheus", "linus", "erato", "saga", "gunnlod", "kvasir",
     "kronos", "atlas", "baldr", "vali", "forseti", "bragi", "ullr",
     "hermod", "loki", "nike", "freya", "zephyros", "sif",
-    "hades", "helios", "ares", "hephaestus", "pan", "aeolus", "metis", "prometheus", "selene", "daedalus",
-    "odin", "heimdall", "thor", "tyr", "vidar", "njord", "mimir",
+    "hades", "helios", "ares", "hephaestus", "pan", "aeolus", "metis", "prometheus", "selene", "daedalus", "endymion",
+    "odin", "heimdall", "thor", "tyr", "vidar", "njord", "mimir", "mani",
     "pygmalion",
   ]);
   // All four engines are integrated, same as consensflow-pi — plus the Codex-backend image kind.
@@ -128,10 +129,29 @@ test("participant presets mirror consensflow-pi exactly (image preset included)"
   assert.equal(getPreset("kronos").model, "anthropic/claude-opus-4-8");
   assert.equal(getPreset("baldr").model, "openrouter/anthropic/claude-opus-4.8");
   assert.equal(getPreset("forseti").model, "openrouter/openai/gpt-5.5");
-  // Effort vocabularies are engine-real: "max" exists only on claude-code; OpenRouter tops out
-  // at xhigh, and models without catalog variants (e.g. Kimi K2.7 Code) carry no effort at all.
+  // Effort vocabularies are engine-real: claude-code tops out at "max", Codex's GPT 5.6 ladder
+  // adds "ultra" above xhigh, OpenRouter tops out at xhigh, and models without catalog variants
+  // (e.g. the Kimi family on opencode) carry no effort at all.
   assert.equal(getPreset("baldr").effort, "xhigh");
   assert.equal(getPreset("luna").effort, undefined);
+  // GPT 5.6 celestial trio on Codex: Sol (flagship) gets ultra + xhigh, Terra and Luna get xhigh.
+  assert.equal(getPreset("hyperion").kind, "codex");
+  assert.equal(getPreset("hyperion").model, "gpt-5.6-sol");
+  assert.equal(getPreset("hyperion").effort, "ultra");
+  assert.equal(getPreset("phoebus").model, "gpt-5.6-sol");
+  assert.equal(getPreset("phoebus").effort, "xhigh");
+  assert.equal(getPreset("gaia").model, "gpt-5.6-terra");
+  assert.equal(getPreset("gaia").effort, "xhigh");
+  assert.equal(getPreset("diana").model, "gpt-5.6-luna");
+  assert.equal(getPreset("diana").effort, "xhigh");
+  // Kimi K3 runs on both engines: endymion (pi, xhigh thinking → K3 max via ~/.pi/agent/models.json)
+  // and mani (opencode, no catalog variants → no effort flag).
+  assert.equal(getPreset("endymion").kind, "pi");
+  assert.equal(getPreset("endymion").model, "openrouter/moonshotai/kimi-k3");
+  assert.equal(getPreset("endymion").thinking, "xhigh");
+  assert.equal(getPreset("mani").kind, "opencode");
+  assert.equal(getPreset("mani").model, "openrouter/moonshotai/kimi-k3");
+  assert.equal(getPreset("mani").effort, undefined);
   // Kimi K2.7 Code runs on both engines: luna (opencode) and daedalus/selene (pi, high thinking).
   assert.equal(getPreset("luna").model, "openrouter/moonshotai/kimi-k2.7-code");
   assert.equal(getPreset("daedalus").kind, "pi");
