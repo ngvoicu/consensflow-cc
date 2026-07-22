@@ -106,7 +106,7 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add zeus                   
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add daedalus               # Pi-backed Kimi K2.7 Code → @daedalus
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add all                    # add every preset
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add zeus --name Deepreview # preset backend, renamed → @deepreview
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name Builder --kind codex --model gpt-5.5 --effort high   # fully custom; read-write like every participant
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name Builder --kind codex --model gpt-5.6-sol --effort high   # fully custom; read-write like every participant
 ```
 
 Presets run read-write like any participant; the same model+effort family exists on every engine that runs it:

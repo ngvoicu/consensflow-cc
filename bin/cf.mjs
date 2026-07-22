@@ -434,7 +434,7 @@ function formatParticipants(participants, cwd = process.cwd()) {
       "/consensflow:participants add zeus                      # add a preset",
       "/consensflow:participants add zeus --name Deepreview    # preset backend, custom name",
       "/consensflow:participants add all                       # every preset",
-      "/consensflow:participants add --name Builder --kind codex --model gpt-5.5 --tools workspace-write",
+      "/consensflow:participants add --name Builder --kind codex --model gpt-5.6-sol --tools workspace-write",
       "```",
     ].join("\n");
   }
@@ -489,7 +489,7 @@ Manage participants (shared across Claude Code and Pi, ${participantsPath(proces
 /consensflow:participants add zeus                      # add a preset
 /consensflow:participants add zeus --name Deepreview    # preset backend, your own name
 /consensflow:participants add all                       # every preset
-/consensflow:participants add --name Builder --kind codex --model gpt-5.5 --effort high \\
+/consensflow:participants add --name Builder --kind codex --model gpt-5.6-sol --effort high \\
     --tools workspace-write                             # fully custom, write-capable
 /consensflow:participants show @zeus
 /consensflow:participants remove @zeus

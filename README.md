@@ -10,7 +10,7 @@ This is the Claude Code-native sibling of [consensflow-pi](../consensflow-pi/): 
 
 You're coding with **Claude Code**, your main AI assistant. Sometimes you want another model's take — maybe Codex to sanity-check a diff, a second Claude at max effort for architecture, or a cheap fast model for a quick gut-check.
 
-ConsensFlow lets you keep a roster of **participants**. A participant is just *one specific AI agent + model* that you've set up and given a name — like `@zeus` or `@athena`. When you want one's opinion, you `@mention` it right in your Claude Code prompt. ConsensFlow then:
+ConsensFlow lets you keep a roster of **participants**. A participant is just *one specific AI agent + model* that you've set up and given a name — like `@zeus` or `@gaia`. When you want one's opinion, you `@mention` it right in your Claude Code prompt. ConsensFlow then:
 
 1. packages a snapshot of your current conversation (the **handoff**) plus your question,
 2. runs that agent in an isolated subprocess as a **one-shot** (your session stays usable),

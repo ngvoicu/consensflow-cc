@@ -218,8 +218,8 @@ test("user-prompt hook stays silent for stray mentions, commands, and unknown na
 test("user-prompt hook surfaces the one-at-a-time rule for multiple leading mentions", async () => {
   await withTempDir(async (dir) => {
     await addParticipant(dir, "zeus");
-    await addParticipant(dir, "athena");
-    const result = await runHook("user-prompt-hook.mjs", { cwd: dir, prompt: "@zeus @athena what do you both think?" }, hookEnv(dir));
+    await addParticipant(dir, "gaia");
+    const result = await runHook("user-prompt-hook.mjs", { cwd: dir, prompt: "@zeus @gaia what do you both think?" }, hookEnv(dir));
     assert.equal(result.exitCode, 0);
     const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
     assert.match(context, /one participant at a time/);
@@ -329,15 +329,15 @@ test("e2e: all four engines run, parse, and persist artifacts through the real s
     await mkdir(ws, { recursive: true });
     const fake = await makeFakeEngines(dir);
     const ctx = { ws, dir, fake };
-    for (const preset of ["zeus", "athena", "iris", "luna"]) {
+    for (const preset of ["zeus", "gaia", "kronos", "luna"]) {
       const add = await runCf(["participants", "add", preset], ctx);
       assert.equal(add.exitCode, 0, add.stderr);
     }
 
     const cases = [
       { ref: "@zeus", engine: "claude", expect: "CLAUDE OK" },
-      { ref: "@athena", engine: "codex", expect: "CODEX OK" },
-      { ref: "@iris", engine: "pi", expect: "PI OK" },
+      { ref: "@gaia", engine: "codex", expect: "CODEX OK" },
+      { ref: "@kronos", engine: "pi", expect: "PI OK" },
       { ref: "@luna", engine: "opencode", expect: "OPENCODE OK" },
     ];
     for (const { ref, engine, expect } of cases) {

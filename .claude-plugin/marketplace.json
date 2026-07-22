@@ -18,7 +18,8 @@
         "second-opinion",
         "multi-agent",
         "prompt-routing"
-      ]
+      ],
+      "version": "1.7.0"
     }
   ]
 }
