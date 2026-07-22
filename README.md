@@ -19,7 +19,7 @@ ConsensFlow lets you keep a roster of **participants**. A participant is just *o
 The whole idea in five bullets:
 
 - **Participant** = a named *(agent + model)* combo. Configure once, reuse from any project. The roster is **shared across both tools** at `~/.consensflow/participants.json` — set it up once, use it from pi and cc.
-- **One at a time.** `@zeus @athena …` is rejected — ask one, read, then ask the next.
+- **One at a time.** `@zeus @gaia …` is rejected — ask one, read, then ask the next.
 - **Standard read-write by default.** A participant runs as a normal CLI call — exactly like running that agent yourself — so by default it can read, edit files, and run commands, confined to the project workspace (`workspace-write`). The lead still decides whether to keep its changes. `--tools full-auto` is the only escalation; it bypasses the engine's sandbox/approval checks.
 - **One-shot, but context-aware.** Each call is fresh (no memory of past calls), yet it always receives the current session handoff — *including earlier participants' answers* — so the 2nd agent you ask can build on the 1st.
 - **The lead can ask too — and asks before applying.** Claude Code will consult a participant on its own initiative when a second opinion would help, then report back and get your go-ahead before applying anything — unless you pre-authorized it.
@@ -84,7 +84,7 @@ claude plugin validate /path/to/consensflow-cc
 
 ### Step 1 — Configure participants
 
-Same presets as consensflow-pi (56 curated presets — every model+effort family on every engine that runs it, including the `@pygmalion` image preset; `/consensflow:presets` prints the full list):
+Same presets as consensflow-pi (53 curated presets — every model+effort family on every engine that runs it, including the `@pygmalion` image preset; `/consensflow:presets` prints the full list):
 
 ```text
 /consensflow:presets                         # see all presets
@@ -112,7 +112,7 @@ Config lives in the **shared** roster `~/.consensflow/participants.json` — use
 /consensflow:cf @zeus What's the riskiest part?       # explicit slash command
 ```
 
-Admin shortcuts: `/consensflow:status`, `/consensflow:doctor`, `/consensflow:presets`, and `/consensflow:participants` (no arguments lists what you've added; it also takes `add` / `show` / `remove` arguments, e.g. `/consensflow:participants add athena`) — each just runs the matching CLI subcommand.
+Admin shortcuts: `/consensflow:status`, `/consensflow:doctor`, `/consensflow:presets`, and `/consensflow:participants` (no arguments lists what you've added; it also takes `add` / `show` / `remove` arguments, e.g. `/consensflow:participants add gaia`) — each just runs the matching CLI subcommand.
 
 Claude itself can also consult participants on its own initiative (the bundled skill encourages it before finalizing non-trivial designs/diffs) — consulting is free, **acting on the answer always needs your approval** unless you pre-authorized it.
 

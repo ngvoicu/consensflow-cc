@@ -66,8 +66,8 @@ These two rules are the heart of the skill. They pull in opposite directions on 
 The lead may, and should, reach for a participant on its own initiative, with NO user permission needed merely to consult. Treat a participant consultation as a natural reflex, not a rare ceremony — before finalizing a non-trivial design or diff, consider getting another take. Just run the CLI; you do not ask the user "may I consult X?" first. Good moments, with the kind of prompt to send:
 
 - **Before finalizing a non-trivial design or diff** — `@zeus` "Review this approach; call out the riskiest assumption and anything you'd do differently."
-- **To stress-test a plan** — `@athena` "Poke holes in this migration plan — what breaks under load or on rollback?"
-- **To surface unknowns before building** — `@iris` "What questions should I answer before I start implementing this?"
+- **To stress-test a plan** — `@hyperion` "Poke holes in this migration plan — what breaks under load or on rollback?"
+- **To surface unknowns before building** — `@gaia` "What questions should I answer before I start implementing this?"
 - **For a quick gut-check or tie-breaker** — `@luna` "Does this error handling read as correct to you — yes/no with one reason?"
 - **For a focused diff/task check** — run `git diff` yourself and paste the relevant parts into the prompt or `--context` brief.
 
@@ -113,8 +113,8 @@ Presets run read-write like any participant; the same model+effort family exists
 
 - **Fable 5** (Anthropic's top model — use for the questions that really matter): `@calliope`/`@clio`/`@euterpe`/`@thalia` (Claude Code max/xhigh/high/medium), `@orpheus`/`@linus`/`@erato` (Pi xhigh/high/medium, Anthropic auth), `@saga`/`@gunnlod`/`@kvasir` (OpenCode xhigh/high/medium via OpenRouter).
 - **Opus 4.8**: `@zeus`/`@apollo`/`@artemis` (Claude Code max/xhigh/medium), `@kronos`/`@atlas` (Pi xhigh/medium, Anthropic auth), `@baldr`/`@vali` (OpenCode xhigh/medium via OpenRouter; xhigh is the ceiling outside claude-code).
-- **GPT 5.5**: `@athena`/`@perseus`/`@loki` (Codex xhigh/high/medium), `@iris`/`@hermes`/`@eos` (Pi xhigh/high/medium), `@forseti`/`@bragi`/`@ullr` (OpenCode xhigh/high/medium via OpenRouter).
-- **Deep open-weights**: Kimi K2.7 Code — `@luna` (OpenCode), `@daedalus` (Pi craftsman preset), `@selene` (Pi moon-goddess alias; both Pi presets use high thinking).
+- **GPT 5.6** (three variants: Sol flagship, Terra balanced, Luna fast): `@hyperion`/`@phoebus` (Codex Sol ultra/xhigh), `@gaia` (Codex Terra xhigh), `@diana` (Codex Luna xhigh), `@aether`/`@rhea`/`@phoebe` (Pi Sol/Terra/Luna xhigh, same ChatGPT login), `@sunna`/`@jord`/`@bil` (OpenCode Sol/Terra/Luna xhigh via OpenRouter).
+- **Deep open-weights**: Kimi K3 — `@endymion` (Pi, xhigh thinking), `@mani` (OpenCode); Kimi K2.7 Code — `@luna` (OpenCode), `@daedalus` (Pi craftsman preset), `@selene` (Pi moon-goddess alias; both Pi presets use high thinking).
 - **Fast/cheap tier** (quick gut-checks): `@hermod` (Claude Haiku 4.5), `@nike`/`@sif` (Gemini 3.5 Flash on Pi/OpenCode), `@zephyros`/`@freya` (DeepSeek V4 Flash on Pi/OpenCode).
 - **Model zoo** (same OpenRouter models on two engines; Greek = pi, Norse = opencode): DeepSeek V4 Pro `@hades`/`@odin`, Gemini 3.1 Pro `@helios`/`@heimdall`, Grok 4.3 `@ares`/`@thor`, Qwen3.7 Max `@hephaestus`/`@tyr`, Llama 4 Maverick `@pan`/`@vidar`, Mistral Large `@aeolus`/`@njord`, MiniMax M3 `@metis`/`@mimir`, GLM 5.2 `@prometheus` (pi only).
 - **Image**: `@pygmalion` (kind=image) generates a picture with gpt-image-2 via the Codex CLI login (`codex login`) — prompt-only (no handoff), optional `--image <path>` reference(s), PNG saved as `image.png` in the run dir; open it with the Read tool to view or show it.
