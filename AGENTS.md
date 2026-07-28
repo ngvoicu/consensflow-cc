@@ -17,7 +17,7 @@ Claude Code-native ConsensFlow package: a Claude Code **plugin** (skill + slash 
 
 - `bin/cf.mjs` — the CLI the lead drives via the Bash tool: `status` / `doctor` / `participants …` / `run @name …`. Owns run orchestration (handoff, answer-only run output with failure/empty-handoff diagnostics) and the image-participant path (`runImageParticipant`: prompt-only, Codex backend, PNG artifact) — the CC analog of pi's `index.ts` glue.
 - `lib/*.js` — plain JS, the unit-tested core:
-  - `presets.js` — preset catalog + `participantFromPreset` (pi's catalog 1:1, pygmalion included). Delta vs pi: printed guidance promotes the host slash commands (`/consensflow:participants …`), not pi's `/cf …`.
+  - `presets.js` — preset catalog + `participantFromPreset`, plus the catalog-drift helpers (`presetDrift`/`syncParticipantWithPreset`/`driftedParticipants`) behind `participants sync` (pi's catalog 1:1, pygmalion included). Delta vs pi: printed guidance promotes the host slash commands (`/consensflow:participants …`), not pi's `/cf …`.
   - `state.js` — single shared ConsensFlow home (`configHome()` / `configRoot()` = `~/.consensflow`) + `participants.json` + one-time migration from old per-tool rosters when the shared file is missing + `normalizeParticipant` + workspace artifacts/session stash under `workspaces/` (`loadSession`/`saveSession`).
   - `packets.js` — `createPacket` (conversational, mode-aware, handoff + prompt).
   - `transcript.js` — Claude Code transcript JSONL → handoff text (defensive parse, sidechain/meta/noise skip, thinking redaction, ConsensFlow-run tool results kept near-whole for cross-pollination, byte-capped keep-tail). Replaces pi's `handoff.js`.

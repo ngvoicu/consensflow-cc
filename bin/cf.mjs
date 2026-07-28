@@ -6,7 +6,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { codexAuthPath, loadCodexAuth } from "../lib/codex-auth.js";
 import { generateImage, imageFileToDataUrl, IMAGE_BACKEND, IMAGE_TRIGGER_DEFAULT, saveImagePng } from "../lib/image.js";
-import { formatPresets, getPreset, listPresetIds, participantFromPreset } from "../lib/presets.js";
+import { driftedParticipants, formatPresets, getPreset, listPresetIds, participantFromPreset } from "../lib/presets.js";
 import {
   cfRoot,
   configHome,
@@ -19,6 +19,7 @@ import {
   recordLatestRun,
   removeParticipant,
   runsRoot,
+  syncParticipantsWithPresets,
   upsertParticipant,
 } from "../lib/state.js";
 import { collectHandoff } from "../lib/transcript.js";
@@ -65,7 +66,7 @@ async function handleStatus(cwd) {
       `Participants file: ${participantsPath(cwd)}`,
       `Artifact root for this workspace: ${cfRoot(cwd)}`,
       `Session stash: ${session.transcriptPath ? `transcript tracked (${session.transcriptPath})` : "no transcript tracked yet — handoffs will be empty until the plugin hooks run"}`,
-      `Participants: ${participants.length}`,
+      `Participants: ${participants.length}${driftNote(participants)}`,
       `Latest run: ${current.latestRunId ?? "none"}`,
       "",
       formatParticipants(participants, cwd),
@@ -121,6 +122,13 @@ async function handleParticipants(tokens, cwd) {
     console.log(formatPresets());
     return;
   }
+  if (sub === "sync") {
+    const parsed = parseOptions(tokens);
+    const result = await syncParticipantsWithPresets(cwd, { dryRun: Boolean(parsed.flags["dry-run"]) });
+    console.log(formatSync(result));
+    return;
+  }
+
   if (sub === "show") {
     const ref = tokens[0];
     if (!ref) throw new Error("Usage: /consensflow:participants show @name");
@@ -179,7 +187,7 @@ async function handleParticipants(tokens, cwd) {
     }
     throw new Error(addUsage());
   }
-  throw new Error("Usage: /consensflow:participants list|presets|add|show|remove");
+  throw new Error("Usage: /consensflow:participants list|presets|add|show|remove|sync");
 }
 
 async function handleRun(tokens, cwd) {
@@ -438,7 +446,40 @@ function formatParticipants(participants, cwd = process.cwd()) {
       "```",
     ].join("\n");
   }
-  return ["# ConsensFlow participants", "", `Participants file: ${participantsPath(cwd)}`, "", ...participants.map(formatParticipantLine)].join("\n");
+  const drift = driftNote(participants);
+  return [
+    "# ConsensFlow participants",
+    "",
+    `Participants file: ${participantsPath(cwd)}`,
+    ...(drift ? [`Catalog:${drift}`] : []),
+    "",
+    ...participants.map(formatParticipantLine),
+  ].join("\n");
+}
+
+// One-line "you are behind the catalog" hint, appended wherever the roster is summarised.
+function driftNote(participants) {
+  const drifted = driftedParticipants(participants);
+  if (drifted.length === 0) return "";
+  return `  (${drifted.length} behind the catalog — run \`/consensflow:participants sync\`)`;
+}
+
+function formatSync(result) {
+  const lines = ["# ConsensFlow participants sync", ""];
+  if (result.synced.length === 0) {
+    lines.push(`All ${result.total} participants already match the catalog.`);
+  } else {
+    for (const entry of result.synced) {
+      for (const change of entry.changes) {
+        // Descriptions are long; report them as a fact rather than a diff.
+        lines.push(change.field === "description" ? `@${entry.id}  description updated` : `@${entry.id}  ${change.field}  ${change.from ?? "(none)"} → ${change.to ?? "(none)"}`);
+      }
+    }
+    lines.push("");
+    lines.push(`${result.dryRun ? "Would sync" : "Synced"} ${result.synced.length} participant${result.synced.length === 1 ? "" : "s"} (${result.total - result.synced.length} already current).`);
+  }
+  if (result.orphans.length > 0) lines.push("", `Left pinned (preset no longer in the catalog): ${result.orphans.join(", ")}`);
+  return lines.join("\n");
 }
 
 function formatParticipantLine(p) {
@@ -498,7 +539,7 @@ Manage participants (shared across Claude Code and Pi, ${participantsPath(proces
 \`\`\`
 
 For the lead (via the Bash tool), the CLI subcommands are \`status\` | \`doctor\` |
-\`participants list|presets|add|show|remove\` | \`run @name <prompt>\`, with run flags
+\`participants list|presets|add|show|remove|sync\` | \`run @name <prompt>\`, with run flags
 \`--tools workspace-write|full-auto\` | \`--prompt <text>\` |
 \`--prompt-file <file>\` | \`--context <note>\` | \`--no-handoff\` | \`--image <path>\` (image participants) | \`--json\`.
 

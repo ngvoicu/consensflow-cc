@@ -4,6 +4,7 @@
 // availability note as context. Must never block session start — always exits 0.
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { driftedParticipants } from "../lib/presets.js";
 import { ensureCfDirs, loadParticipants, saveSession } from "../lib/state.js";
 import { readStdinText } from "./hook-io.mjs";
 
@@ -25,7 +26,7 @@ try {
     [
       "ConsensFlow is available: consult one named AI participant (an external coding-agent CLI, run one-shot with a session handoff) for advice, second opinions, implementation help, or write-capable task execution.",
       `CLI: node "${CLI_PATH}" — subcommands: status | doctor | participants … | run @name <prompt>`,
-      `Participants: ${roster}`,
+      `Participants: ${roster}${driftNote(participants)}`,
       "Consulting is free and encouraged (one at a time). Acting is gated: never apply a participant's advice or file changes without the user's approval, unless they pre-authorized it.",
     ].join("\n"),
   );
@@ -33,3 +34,11 @@ try {
   // A broken hook must never break the session.
 }
 process.exit(0);
+
+// A ConsensFlow update ships a new preset catalog, but roster entries keep the models they were
+// added with until synced. Say so once, where the lead sees it at session start.
+function driftNote(participants) {
+  const drifted = driftedParticipants(participants);
+  if (drifted.length === 0) return "";
+  return `\nCatalog: ${drifted.length} participant${drifted.length === 1 ? " is" : "s are"} behind the current preset catalog — run \`participants sync\` to upgrade their models.`;
+}

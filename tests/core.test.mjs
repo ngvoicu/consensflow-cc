@@ -4,9 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createPacket } from "../lib/packets.js";
-import { getPreset, listPresetIds, PARTICIPANT_PRESETS, participantFromPreset } from "../lib/presets.js";
+import { driftedParticipants, getPreset, listPresetIds, PARTICIPANT_PRESETS, participantFromPreset, PRESET_OWNED_FIELDS } from "../lib/presets.js";
 import { buildRunnerInvocation, codexSandbox, normalizeProcessOutput, runParticipant, spawnWithInput, toolsForPi } from "../lib/runners.js";
-import { configRoot, getParticipant, loadParticipants, normalizeParticipant, participantsPath, removeParticipant, upsertParticipant } from "../lib/state.js";
+import { configRoot, getParticipant, loadParticipants, normalizeParticipant, participantsPath, removeParticipant, syncParticipantsWithPresets, upsertParticipant } from "../lib/state.js";
 import { effectiveToolsPolicy, participantForKind } from "../lib/workflows.js";
 import { parseOptions, parseParticipantPrompt, resolveInside, slugify, tokenize } from "../lib/utils.js";
 
@@ -109,11 +109,11 @@ test("participant presets mirror consensflow-pi exactly (image preset included)"
     "calliope", "clio", "euterpe", "thalia",
     "hyperion", "phoebus", "gaia", "diana",
     "aether", "rhea", "phoebe", "sunna", "jord", "bil",
-    "zeus", "apollo", "artemis", "luna",
+    "zeus", "apollo", "artemis",
     "orpheus", "linus", "erato", "saga", "gunnlod", "kvasir",
     "kronos", "atlas", "baldr", "vali",
     "hermod", "nike", "freya", "zephyros", "sif",
-    "hades", "helios", "ares", "hephaestus", "pan", "aeolus", "metis", "prometheus", "selene", "daedalus", "endymion",
+    "hades", "helios", "ares", "hephaestus", "pan", "aeolus", "metis", "prometheus", "endymion",
     "odin", "heimdall", "thor", "tyr", "vidar", "njord", "mimir", "mani",
     "pygmalion",
   ]);
@@ -129,14 +129,14 @@ test("participant presets mirror consensflow-pi exactly (image preset included)"
   // The frontier matrix: same model+effort family on every engine that runs it.
   assert.equal(getPreset("artemis").effort, "medium");
   assert.equal(getPreset("hyperion").effort, "ultra");
-  assert.equal(getPreset("kronos").model, "anthropic/claude-opus-4-8");
-  assert.equal(getPreset("baldr").model, "openrouter/anthropic/claude-opus-4.8");
+  assert.equal(getPreset("kronos").model, "anthropic/claude-opus-5");
+  assert.equal(getPreset("baldr").model, "openrouter/anthropic/claude-opus-5");
   assert.equal(getPreset("saga").model, "openrouter/anthropic/claude-fable-5");
   // Effort vocabularies are engine-real: claude-code tops out at "max", Codex's GPT 5.6 ladder
-  // adds "ultra" above xhigh, OpenRouter tops out at xhigh, and models without catalog variants
-  // (e.g. the Kimi family on opencode) carry no effort at all.
+  // adds "ultra" above xhigh, the OpenRouter-backed presets stay at xhigh, and models without
+  // catalog variants (e.g. the Kimi family on opencode) carry no effort at all.
   assert.equal(getPreset("baldr").effort, "xhigh");
-  assert.equal(getPreset("luna").effort, undefined);
+  assert.equal(getPreset("mani").effort, undefined);
   // GPT 5.6 celestial trio on Codex: Sol (flagship) gets ultra + xhigh, Terra and Luna get xhigh.
   assert.equal(getPreset("hyperion").kind, "codex");
   assert.equal(getPreset("hyperion").model, "gpt-5.6-sol");
@@ -167,13 +167,17 @@ test("participant presets mirror consensflow-pi exactly (image preset included)"
   assert.equal(getPreset("mani").kind, "opencode");
   assert.equal(getPreset("mani").model, "openrouter/moonshotai/kimi-k3");
   assert.equal(getPreset("mani").effort, undefined);
-  // Kimi K2.7 Code runs on both engines: luna (opencode) and daedalus/selene (pi, high thinking).
-  assert.equal(getPreset("luna").model, "openrouter/moonshotai/kimi-k2.7-code");
-  assert.equal(getPreset("daedalus").kind, "pi");
-  assert.equal(getPreset("daedalus").model, "openrouter/moonshotai/kimi-k2.7-code");
-  assert.equal(getPreset("daedalus").thinking, "high");
-  assert.equal(getPreset("selene").model, "openrouter/moonshotai/kimi-k2.7-code");
-  assert.equal(getPreset("selene").thinking, "high");
+  // Kimi K2.7 Code was retired in 1.9.0 (K3 supersedes it); Kimi is K3-only on both engines now.
+  assert.ok(!PARTICIPANT_PRESETS.some((p) => String(p.model).includes("kimi-k2")));
+  assert.equal(getPreset("endymion").model, "openrouter/moonshotai/kimi-k3");
+  assert.equal(getPreset("endymion").kind, "pi");
+  assert.equal(getPreset("mani").model, "openrouter/moonshotai/kimi-k3");
+  assert.equal(getPreset("mani").kind, "opencode");
+  // Grok and Gemini Flash track the current generation too (4.3 -> 4.5, 3.5 -> 3.6).
+  assert.equal(getPreset("ares").model, "openrouter/x-ai/grok-4.5");
+  assert.equal(getPreset("thor").model, "openrouter/x-ai/grok-4.5");
+  assert.equal(getPreset("nike").model, "openrouter/google/gemini-3.6-flash");
+  assert.equal(getPreset("sif").model, "openrouter/google/gemini-3.6-flash");
   // GLM 5.2 on pi (Greek model zoo, high thinking).
   assert.equal(getPreset("prometheus").kind, "pi");
   assert.equal(getPreset("prometheus").model, "openrouter/z-ai/glm-5.2");
@@ -189,11 +193,30 @@ test("participant presets mirror consensflow-pi exactly (image preset included)"
   assert.equal(getPreset("euterpe").effort, "high");
   assert.equal(getPreset("linus").thinking, "high");
   assert.equal(getPreset("gunnlod").effort, "high");
-  const luna = participantFromPreset("luna", { cwd: "frontend" });
-  assert.equal(luna.id, "luna");
-  assert.equal(luna.name, "Luna");
-  assert.equal(luna.cwd, "frontend");
+  const mani = participantFromPreset("mani", { cwd: "frontend" });
+  assert.equal(mani.id, "mani");
+  assert.equal(mani.name, "Mani");
+  assert.equal(mani.cwd, "frontend");
   assert.equal(participantFromPreset("custom"), null);
+});
+
+// The selene/daedalus duplicate (same engine + model + tier under two names) sat in the catalog
+// unnoticed until 1.9.0 retired it. Pin the structural invariants so the next one is caught here.
+test("catalog invariants: unique mentions, no duplicate backends", () => {
+  const ids = PARTICIPANT_PRESETS.map((preset) => preset.preset);
+  assert.equal(new Set(ids).size, ids.length, "preset ids are unique");
+  // getParticipant resolves an @ref by id OR slugified name, so one preset's name slug must never
+  // shadow another's id (same rule state.js enforces on the roster via assertUniqueParticipants).
+  const claimed = new Map();
+  for (const preset of PARTICIPANT_PRESETS) {
+    for (const mention of new Set([preset.id, slugify(preset.name)].filter(Boolean))) {
+      assert.ok(!claimed.has(mention), `@${preset.preset} collides with @${claimed.get(mention)} on '${mention}'`);
+      claimed.set(mention, preset.preset);
+    }
+  }
+  const backends = PARTICIPANT_PRESETS.map((preset) => [preset.kind, preset.model, preset.effort ?? "", preset.thinking ?? ""].join("|"));
+  assert.deepEqual(backends.filter((b, i) => backends.indexOf(b) !== i), [], "no two presets share an identical engine+model+tier");
+  assert.equal(PARTICIPANT_PRESETS.length, new Set(PARTICIPANT_PRESETS.map((p) => p.label)).size, "labels are unique too");
 });
 
 test("every preset survives normalize + runner invocation with correct flags (all models × all engines)", () => {
@@ -241,9 +264,9 @@ test("runner invocation maps tool policies", () => {
   assert.equal(toolsForPi(), "read,grep,find,ls,bash,edit,write"); // pi always full tools (no read-only bash sandbox)
   assert.equal(codexSandbox("workspace-write"), "workspace-write");
   assert.equal(codexSandbox("full-auto"), "danger-full-access");
-  const pi = buildRunnerInvocation({ kind: "pi", model: "openrouter/moonshotai/kimi-k2.7-code", toolsPolicy: "workspace-write", skillsPolicy: "default" }, "/tmp/packet.md", "/repo");
+  const pi = buildRunnerInvocation({ kind: "pi", model: "openrouter/moonshotai/kimi-k3", toolsPolicy: "workspace-write", skillsPolicy: "default" }, "/tmp/packet.md", "/repo");
   assert.equal(pi.command, "pi");
-  assert.deepEqual(pi.args.slice(0, 6), ["--mode", "json", "--no-session", "--no-extensions", "--model", "openrouter/moonshotai/kimi-k2.7-code"]);
+  assert.deepEqual(pi.args.slice(0, 6), ["--mode", "json", "--no-session", "--no-extensions", "--model", "openrouter/moonshotai/kimi-k3"]);
   assert.ok(pi.args.includes("off"));
   assert.equal(pi.args.includes("--no-skills"), false);
   const sterilePi = buildRunnerInvocation({ kind: "pi", toolsPolicy: "workspace-write", skillsPolicy: "none" }, "/tmp/packet.md", "/repo");
@@ -530,12 +553,12 @@ test("participantFromPreset can rename while keeping the backend", () => {
   assert.equal(renamed.id, "deepreview");
   assert.equal(renamed.name, "Deepreview");
   assert.equal(renamed.kind, "claude-code");
-  assert.equal(renamed.model, "claude-opus-4-8");
+  assert.equal(renamed.model, "claude-opus-5");
   assert.equal(renamed.preset, "zeus");
   // Without a rename, the canonical preset id and name are kept.
-  const luna = participantFromPreset("luna");
-  assert.equal(luna.id, "luna");
-  assert.equal(luna.name, "Luna");
+  const mani = participantFromPreset("mani");
+  assert.equal(mani.id, "mani");
+  assert.equal(mani.name, "Mani");
 });
 
 test("parseParticipantPrompt routes one mention anywhere, and never hijacks stray @tokens", () => {
@@ -578,6 +601,64 @@ test("resolveInside rejects symlinked escapes, not just lexical ../ ones", async
   });
 });
 
+// The roster snapshots a preset's engine fields, so a ConsensFlow update that ships a new catalog
+// (Opus 4.8 -> Opus 5) does not reach participants added under the old one. `participants sync`
+// re-resolves them; this pins down exactly what it may and may not touch.
+test("participants sync re-resolves preset-backed entries and leaves everything else pinned", async () => {
+  await withTempDir(async (dir) => {
+    // Added under an older catalog: stale model + effort, plus a rename and a cwd to preserve.
+    await upsertParticipant(dir, {
+      name: "Deepreview",
+      id: "deepreview",
+      kind: "claude-code",
+      model: "claude-opus-4-8",
+      effort: "medium",
+      cwd: "backend",
+      preset: "zeus",
+      description: "stale text from an older catalog",
+    });
+    // A hand-rolled participant: no preset, so sync must never rewrite it.
+    await upsertParticipant(dir, { name: "Builder", kind: "codex", model: "my-own-model", effort: "high" });
+    // Names a preset the catalog no longer carries — stays pinned to what it was created with.
+    await upsertParticipant(dir, { name: "Ghost", kind: "codex", model: "gpt-5.5", effort: "xhigh", preset: "retired-preset" });
+    const current = await upsertParticipant(dir, participantFromPreset("nike"));
+
+    const preview = await syncParticipantsWithPresets(dir, { dryRun: true });
+    assert.equal(preview.synced.length, 1, "only the drifted preset-backed entry is reported");
+    assert.equal(preview.synced[0].id, "deepreview");
+    assert.deepEqual(preview.orphans, ["@ghost"]);
+    assert.equal((await getParticipant(dir, "@deepreview")).model, "claude-opus-4-8", "dry run writes nothing");
+
+    const result = await syncParticipantsWithPresets(dir);
+    assert.equal(result.synced.length, 1);
+    const fields = result.synced[0].changes.map((change) => change.field).sort();
+    assert.deepEqual(fields, ["effort", "model"], "engine fields only — description is a user override, never synced");
+
+    const synced = await getParticipant(dir, "@deepreview");
+    assert.equal(synced.model, getPreset("zeus").model, "model tracks the catalog");
+    assert.equal(synced.effort, getPreset("zeus").effort, "so does the effort tier");
+    assert.equal(synced.name, "Deepreview", "a rename survives");
+    assert.equal(synced.id, "deepreview");
+    assert.equal(synced.cwd, "backend", "so does a per-participant cwd");
+    assert.equal(synced.preset, "zeus");
+    // `add <preset> --description` is a documented override, so sync must leave the text alone —
+    // and because the two hosts word a few descriptions differently while sharing one roster,
+    // syncing it would also mean the drift nudge could never be cleared.
+    assert.equal(synced.description, "stale text from an older catalog", "a user-authored description survives");
+
+    const custom = await getParticipant(dir, "@builder");
+    assert.equal(custom.model, "my-own-model", "custom participants are never rewritten");
+    assert.equal(custom.effort, "high");
+    const ghost = await getParticipant(dir, "@ghost");
+    assert.equal(ghost.model, "gpt-5.5", "an orphaned preset stays pinned");
+    assert.equal((await getParticipant(dir, "@nike")).updatedAt, current.updatedAt, "up-to-date entries are left untouched");
+
+    const second = await syncParticipantsWithPresets(dir);
+    assert.equal(second.synced.length, 0, "sync is idempotent");
+    assert.deepEqual(driftedParticipants(await loadParticipants(dir)), [], "and the roster reports no drift after it");
+  });
+});
+
 test("upsertParticipant rejects a name slug that collides with another participant's id", async () => {
   await withTempDir(async (dir) => {
     await upsertParticipant(dir, { name: "Zeus", kind: "claude-code", model: "claude-opus-4-8" });
@@ -592,6 +673,32 @@ test("upsertParticipant rejects a name slug that collides with another participa
 
 // lib parity with the consensflow-pi sibling: these files are kept byte-identical by convention
 // (see AGENTS.md). A divergence means a fix landed in one project and silently missed the other.
+// Both hosts share ONE roster, so any field `sync` rewrites must be identical in both catalogs —
+// otherwise each host sees the other's value as drift and the nudge can never be cleared. This is
+// exactly how the pygmalion description (deliberately worded differently per host) broke sync
+// before 1.9.0 shipped: guard it mechanically rather than by review.
+test("parity: every preset-owned field matches the sibling catalog, so sync converges across hosts", async (t) => {
+  let sibling;
+  try {
+    sibling = await import(new URL("../../consensflow-pi/extensions/consensflow/lib/presets.js", import.meta.url).href);
+  } catch {
+    t.skip("consensflow-pi sibling checkout not present");
+    return;
+  }
+  const theirs = new Map(sibling.PARTICIPANT_PRESETS.map((preset) => [preset.preset, preset]));
+  assert.deepEqual(
+    PARTICIPANT_PRESETS.map((p) => p.preset),
+    sibling.PARTICIPANT_PRESETS.map((p) => p.preset),
+    "both catalogs carry the same presets in the same order",
+  );
+  for (const ours of PARTICIPANT_PRESETS) {
+    const other = theirs.get(ours.preset);
+    for (const field of PRESET_OWNED_FIELDS) {
+      assert.equal(ours[field], other[field], `${ours.preset}.${field} differs between hosts — sync would flip it back and forth forever`);
+    }
+  }
+});
+
 test("parity: shared lib files stay identical with the consensflow-pi sibling", async (t) => {
   const siblingLib = new URL("../../consensflow-pi/extensions/consensflow/lib/", import.meta.url);
   for (const file of ["utils.js", "workflows.js", "transcript-events.js"]) {

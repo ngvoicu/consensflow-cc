@@ -68,7 +68,7 @@ The lead may, and should, reach for a participant on its own initiative, with NO
 - **Before finalizing a non-trivial design or diff** — `@zeus` "Review this approach; call out the riskiest assumption and anything you'd do differently."
 - **To stress-test a plan** — `@hyperion` "Poke holes in this migration plan — what breaks under load or on rollback?"
 - **To surface unknowns before building** — `@gaia` "What questions should I answer before I start implementing this?"
-- **For a quick gut-check or tie-breaker** — `@luna` "Does this error handling read as correct to you — yes/no with one reason?"
+- **For a quick gut-check or tie-breaker** — `@nike` "Does this error handling read as correct to you — yes/no with one reason?"
 - **For a focused diff/task check** — run `git diff` yourself and paste the relevant parts into the prompt or `--context` brief.
 
 ### 2. Acting on the output is GATED — never without asking
@@ -103,7 +103,7 @@ Participants are configured in the shared roster `~/.consensflow/participants.js
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants presets                    # list built-in presets
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add zeus                   # add a preset → @zeus
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add daedalus               # Pi-backed Kimi K2.7 Code → @daedalus
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add endymion               # Pi-backed Kimi K3 → @endymion
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add all                    # add every preset
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add zeus --name Deepreview # preset backend, renamed → @deepreview
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name Builder --kind codex --model gpt-5.6-sol --effort high   # fully custom; read-write like every participant
@@ -112,11 +112,11 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name Builder --kind c
 Presets run read-write like any participant; the same model+effort family exists on every engine that runs it:
 
 - **Fable 5** (Anthropic's top model — use for the questions that really matter): `@calliope`/`@clio`/`@euterpe`/`@thalia` (Claude Code max/xhigh/high/medium), `@orpheus`/`@linus`/`@erato` (Pi xhigh/high/medium, Anthropic auth), `@saga`/`@gunnlod`/`@kvasir` (OpenCode xhigh/high/medium via OpenRouter).
-- **Opus 4.8**: `@zeus`/`@apollo`/`@artemis` (Claude Code max/xhigh/medium), `@kronos`/`@atlas` (Pi xhigh/medium, Anthropic auth), `@baldr`/`@vali` (OpenCode xhigh/medium via OpenRouter; xhigh is the ceiling outside claude-code).
+- **Opus 5**: `@zeus`/`@apollo`/`@artemis` (Claude Code max/xhigh/medium), `@kronos`/`@atlas` (Pi xhigh/medium, Anthropic auth), `@baldr`/`@vali` (OpenCode xhigh/medium via OpenRouter).
 - **GPT 5.6** (three variants: Sol flagship, Terra balanced, Luna fast): `@hyperion`/`@phoebus` (Codex Sol ultra/xhigh), `@gaia` (Codex Terra xhigh), `@diana` (Codex Luna xhigh), `@aether`/`@rhea`/`@phoebe` (Pi Sol/Terra/Luna xhigh, same ChatGPT login), `@sunna`/`@jord`/`@bil` (OpenCode Sol/Terra/Luna xhigh via OpenRouter).
-- **Deep open-weights**: Kimi K3 — `@endymion` (Pi, xhigh thinking), `@mani` (OpenCode); Kimi K2.7 Code — `@luna` (OpenCode), `@daedalus` (Pi craftsman preset), `@selene` (Pi moon-goddess alias; both Pi presets use high thinking).
-- **Fast/cheap tier** (quick gut-checks): `@hermod` (Claude Haiku 4.5), `@nike`/`@sif` (Gemini 3.5 Flash on Pi/OpenCode), `@zephyros`/`@freya` (DeepSeek V4 Flash on Pi/OpenCode).
-- **Model zoo** (same OpenRouter models on two engines; Greek = pi, Norse = opencode): DeepSeek V4 Pro `@hades`/`@odin`, Gemini 3.1 Pro `@helios`/`@heimdall`, Grok 4.3 `@ares`/`@thor`, Qwen3.7 Max `@hephaestus`/`@tyr`, Llama 4 Maverick `@pan`/`@vidar`, Mistral Large `@aeolus`/`@njord`, MiniMax M3 `@metis`/`@mimir`, GLM 5.2 `@prometheus` (pi only).
+- **Deep open-weights**: Kimi K3 — `@endymion` (Pi, xhigh thinking), `@mani` (OpenCode). K2.7 Code was retired in 1.9.0.
+- **Fast/cheap tier** (quick gut-checks): `@hermod` (Claude Haiku 4.5), `@nike`/`@sif` (Gemini 3.6 Flash on Pi/OpenCode), `@zephyros`/`@freya` (DeepSeek V4 Flash on Pi/OpenCode).
+- **Model zoo** (same OpenRouter models on two engines; Greek = pi, Norse = opencode): DeepSeek V4 Pro `@hades`/`@odin`, Gemini 3.1 Pro `@helios`/`@heimdall`, Grok 4.5 `@ares`/`@thor`, Qwen3.7 Max `@hephaestus`/`@tyr`, Llama 4 Maverick `@pan`/`@vidar`, Mistral Large `@aeolus`/`@njord`, MiniMax M3 `@metis`/`@mimir`, GLM 5.2 `@prometheus` (pi only).
 - **Image**: `@pygmalion` (kind=image) generates a picture with gpt-image-2 via the Codex CLI login (`codex login`) — prompt-only (no handoff), optional `--image <path>` reference(s), PNG saved as `image.png` in the run dir; open it with the Read tool to view or show it.
 
 Model and effort strings pass through to the engine verbatim, so any identifier the engine accepts works.
@@ -135,6 +135,7 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add all
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>|--thinking <t>] [--tools workspace-write|full-auto] [--cwd <subdir>]
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants show @name
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants remove @name
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants sync [--dry-run]   # re-resolve preset-backed participants against the current catalog
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @name <prompt> [--tools workspace-write|full-auto] [--prompt-file <file>] [--context <note>] [--no-handoff] [--image <path> …] [--json]
 ```
 

@@ -16,9 +16,16 @@ const CF = path.join(ROOT, "bin", "cf.mjs");
 
 async function withTempDir(fn) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "cf-cc-test-"));
+  // Point the shared home at the temp dir for IN-PROCESS lib calls too, not just the
+  // subprocess helpers that pass it explicitly. Without this, a direct saveSession()/
+  // loadSession() in a test writes run artifacts into the developer's real ~/.consensflow.
+  const oldHome = process.env.CONSENSFLOW_HOME;
+  process.env.CONSENSFLOW_HOME = path.join(dir, "home");
   try {
     return await fn(dir);
   } finally {
+    if (oldHome === undefined) delete process.env.CONSENSFLOW_HOME;
+    else process.env.CONSENSFLOW_HOME = oldHome;
     await rm(dir, { recursive: true, force: true });
   }
 }
@@ -161,13 +168,34 @@ async function addParticipant(dir, preset, env = {}) {
   assert.equal(result.exitCode, 0, result.stderr);
 }
 
+// A ConsensFlow update ships a new catalog while the roster keeps its old snapshot. The
+// session-start note is where the lead first sees that, so it must say so and name the fix.
+test("session-start hook flags participants left behind by a catalog update", async () => {
+  await withTempDir(async (dir) => {
+    await addParticipant(dir, "zeus");
+    const clean = await runHook("session-start-hook.mjs", { cwd: dir, session_id: "s-0", transcript_path: "/tmp/tr.jsonl", source: "startup" }, hookEnv(dir));
+    assert.doesNotMatch(clean.stdout, /behind the current preset catalog/, "a freshly added participant is not flagged");
+
+    // Rewind @zeus to the model it would have carried under an older catalog.
+    const rosterPath = path.join(dir, "home", "participants.json"); // hookEnv points CONSENSFLOW_HOME straight at dir/home
+    const roster = JSON.parse(await readFile(rosterPath, "utf8"));
+    roster.participants = roster.participants.map((p) => (p.id === "zeus" ? { ...p, model: "claude-opus-4-8" } : p));
+    await writeFile(rosterPath, JSON.stringify(roster, null, 2));
+
+    const stale = await runHook("session-start-hook.mjs", { cwd: dir, session_id: "s-1", transcript_path: "/tmp/tr.jsonl", source: "startup" }, hookEnv(dir));
+    assert.equal(stale.exitCode, 0);
+    assert.match(stale.stdout, /1 participant is behind the current preset catalog/);
+    assert.match(stale.stdout, /participants sync/);
+  });
+});
+
 test("session-start hook stashes the transcript path and emits a roster context", async () => {
   await withTempDir(async (dir) => {
     await addParticipant(dir, "zeus");
     const result = await runHook("session-start-hook.mjs", { cwd: dir, session_id: "s-1", transcript_path: "/tmp/tr.jsonl", source: "startup" }, hookEnv(dir));
     assert.equal(result.exitCode, 0);
     assert.match(result.stdout, /ConsensFlow is available/);
-    assert.match(result.stdout, /@zeus \(claude-code claude-opus-4-8\)/);
+    assert.match(result.stdout, /@zeus \(claude-code claude-opus-5\)/);
     assert.match(result.stdout, /never apply a participant's advice/);
     assert.match(result.stdout, /bin\/cf\.mjs/);
     const oldHome = process.env.CONSENSFLOW_HOME;
@@ -329,7 +357,7 @@ test("e2e: all four engines run, parse, and persist artifacts through the real s
     await mkdir(ws, { recursive: true });
     const fake = await makeFakeEngines(dir);
     const ctx = { ws, dir, fake };
-    for (const preset of ["zeus", "gaia", "kronos", "luna"]) {
+    for (const preset of ["zeus", "gaia", "kronos", "mani"]) {
       const add = await runCf(["participants", "add", preset], ctx);
       assert.equal(add.exitCode, 0, add.stderr);
     }
@@ -338,7 +366,7 @@ test("e2e: all four engines run, parse, and persist artifacts through the real s
       { ref: "@zeus", engine: "claude", expect: "CLAUDE OK" },
       { ref: "@gaia", engine: "codex", expect: "CODEX OK" },
       { ref: "@kronos", engine: "pi", expect: "PI OK" },
-      { ref: "@luna", engine: "opencode", expect: "OPENCODE OK" },
+      { ref: "@mani", engine: "opencode", expect: "OPENCODE OK" },
     ];
     for (const { ref, engine, expect } of cases) {
       const run = await runCf(["run", ref, "ping", "from", "the", "test"], ctx);
@@ -370,7 +398,7 @@ test("e2e: all four engines run, parse, and persist artifacts through the real s
     const claude = JSON.parse(await readFile(path.join(fake.out, "claude.json"), "utf8"));
     assert.ok(!claude.argv.includes("--bare"), "claude child must NOT run --bare: it forbids OAuth/keychain auth while ANTHROPIC_API_KEY is stripped (1.5.1 regression guard); recursion is covered by CONSENSFLOW_CHILD");
     assert.equal(claude.argv.includes("--disallowedTools"), false, "no claude deny list");
-    assert.equal(claude.argv[claude.argv.indexOf("--model") + 1], "claude-opus-4-8");
+    assert.equal(claude.argv[claude.argv.indexOf("--model") + 1], "claude-opus-5");
     assert.equal(claude.argv[claude.argv.indexOf("--effort") + 1], "max");
     assert.equal(claude.env.ANTHROPIC_API_KEY, null, "billing guard strips ANTHROPIC_API_KEY");
     const codex = JSON.parse(await readFile(path.join(fake.out, "codex.json"), "utf8"));
@@ -411,22 +439,22 @@ test("e2e: streaming is the default (thinking always visible); --json is the onl
     await writeFile(piShimPath, piShim, "utf8");
     await chmod(piShimPath, 0o755);
     const ctx = { ws, dir, fake: { bin, out: dir } };
-    await runCf(["participants", "add", "luna"], ctx);
+    await runCf(["participants", "add", "mani"], ctx);
 
     // --stream can appear before or after the prompt, and the parsed final reply is always printed
     // after the child exits so foreground runs have a durable answer section.
-    const streamed = await runCf(["run", "@luna", "--stream", "go", "check", "git", "diff", "--stat"], ctx);
+    const streamed = await runCf(["run", "@mani", "--stream", "go", "check", "git", "diff", "--stat"], ctx);
     assert.match(streamed.stdout, /→ .*read/, "the tool call is streamed live");
     assert.match(streamed.stdout, /the streamed answer/, "the text is streamed live");
-    assert.match(streamed.stdout, /# @luna/, "the final answer section is printed after the stream");
+    assert.match(streamed.stdout, /# @mani/, "the final answer section is printed after the stream");
     assert.match((await latestPacket(ws, dir)).packet, /go check git diff --stat/, "unknown prompt flags are preserved");
 
     // Streaming is the default — thinking/tools are ALWAYS visible. A run without --stream still
     // streams; only --json suppresses the live trail (machine-readable output).
-    const plain = await runCf(["run", "@luna", "go"], ctx);
+    const plain = await runCf(["run", "@mani", "go"], ctx);
     assert.match(plain.stdout, /the streamed answer/, "the answer is present");
     assert.match(plain.stdout, /→ .*read/, "event lines stream by default — no --stream flag needed");
-    const quiet = await runCf(["run", "@luna", "go", "--json"], ctx);
+    const quiet = await runCf(["run", "@mani", "go", "--json"], ctx);
     assert.doesNotMatch(quiet.stdout, /→ .*read|← .*read/, "--json is the only quiet mode");
 
     assert.equal((await runCf(["participants", "add", "--name", "PiOnly", "--kind", "pi", "--model", "fake"], ctx)).exitCode, 0);
@@ -450,9 +478,9 @@ test("e2e: runParticipant writes a transcript.md backstop (event trail) and sets
     await writeFile(shimPath, shim, "utf8");
     await chmod(shimPath, 0o755);
     const ctx = { ws, dir, fake: { bin, out: dir } };
-    await runCf(["participants", "add", "luna"], ctx);
+    await runCf(["participants", "add", "mani"], ctx);
 
-    const run = await runCf(["run", "@luna", "go", "--json"], ctx);
+    const run = await runCf(["run", "@mani", "go", "--json"], ctx);
     const result = JSON.parse(run.stdout);
     assert.ok(result.transcriptPath, "result.json carries transcriptPath");
     const transcript = await readFile(result.transcriptPath, "utf8");

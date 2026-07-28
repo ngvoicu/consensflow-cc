@@ -37,7 +37,7 @@ Claude (the lead) executes via the Bash tool:
    node ".../bin/cf.mjs" run @zeus --prompt-file "~/.consensflow/workspaces/<ws>/pending-prompt.md"
    ▼
 cf.mjs builds a "packet" for @zeus:
-   • who @zeus is        (claude-code · claude-opus-4-8 · max)
+   • who @zeus is        (claude-code · claude-opus-5 · max)
    • mode line           (workspace-write by default — or full-auto if you escalated)
    • handoff             (a snapshot of THIS session, from the transcript stash the hooks maintain)
    • your question
@@ -80,25 +80,44 @@ claude plugin validate /path/to/consensflow-cc
 
 **Verify** inside a session: `/consensflow:doctor` shows which engine CLIs are installed; `/consensflow:status` shows your participants.
 
+## Updating
+
+A new ConsensFlow release ships a new preset catalog — new models, retired ones, bumped effort tiers. Updating the plugin does **not** touch participants you already added: each roster entry keeps the model it was created with. `participants sync` re-resolves them against the current catalog.
+
+```bash
+claude plugin marketplace update consensflow-cc   # refresh the marketplace from GitHub
+claude plugin update consensflow@consensflow-cc   # install the new version (restart to apply)
+```
+
+Then, in a fresh session:
+
+```text
+/consensflow:participants sync --dry-run   # preview — prints exactly what would change
+/consensflow:participants sync             # apply
+```
+
+Sync rewrites only the fields a preset owns: kind, model, effort/thinking, and tool policy. Your rename (`--name`), per-participant `--cwd`, and any custom `--description` survive it; fully custom participants (no preset) and participants whose preset has left the catalog are left alone and reported. You don't have to remember to run it — `status`, `participants list`, and the session-start note all say "N behind the catalog" when a participant is out of date.
+
 ## How to use
 
 ### Step 1 — Configure participants
 
-Same presets as consensflow-pi (53 curated presets — every model+effort family on every engine that runs it, including the `@pygmalion` image preset; `/consensflow:presets` prints the full list):
+Same presets as consensflow-pi (50 curated presets — every model+effort family on every engine that runs it, including the `@pygmalion` image preset; `/consensflow:presets` prints the full list):
 
 ```text
 /consensflow:presets                         # see all presets
 /consensflow:participants add zeus           # add one        → @zeus
-/consensflow:participants add daedalus       # Pi-backed Kimi K2.7 Code → @daedalus
+/consensflow:participants add endymion      # Pi-backed Kimi K3 → @endymion
 /consensflow:participants add all            # add everything
 /consensflow:participants add zeus --name Deepreview   # renamed copy
+/consensflow:participants sync               # after a ConsensFlow update: upgrade added participants to the new catalog
 ```
 
 Or fully custom (any model string the engine accepts — values pass through verbatim):
 
 ```text
 /consensflow:participants add --name Sonnet --kind claude-code --model claude-sonnet-4-6 --effort high
-/consensflow:participants add --name Builder --kind opencode --model openrouter/moonshotai/kimi-k2.7-code --tools workspace-write
+/consensflow:participants add --name Builder --kind opencode --model openrouter/moonshotai/kimi-k3 --tools workspace-write
 ```
 
 > **Default vs full-auto.** By default a participant runs read-write, confined to the project workspace (`workspace-write`) — it can read, plan, critique, edit files, and run commands, just like running the agent yourself. To remove that confinement and bypass the engine's sandbox/approval checks, pass `--tools full-auto` when creating it, or use it on a single run.
