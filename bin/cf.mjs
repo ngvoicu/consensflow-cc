@@ -27,7 +27,6 @@ import { createId, parseOptions, slugify } from "../lib/utils.js";
 import { runParticipant, spawnWithInput } from "../lib/runners.js";
 import { renderEvent } from "../lib/transcript-events.js";
 import { createPacket } from "../lib/packets.js";
-import { effectiveToolsPolicy, participantForKind } from "../lib/workflows.js";
 
 async function main() {
   const cwd = process.cwd();
@@ -182,7 +181,7 @@ async function handleParticipants(tokens, cwd) {
 
     if (presetRef) {
       throw new Error(
-        `Unknown preset: ${presetRef}\n\nPresets: ${listPresetIds().join(", ")} (rename any with --name).\n\nOr create a custom participant:\n  /consensflow:participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--tools <workspace-write|full-auto>]`,
+        `Unknown preset: ${presetRef}\n\nPresets: ${listPresetIds().join(", ")} (rename any with --name).\n\nOr create a custom participant:\n  /consensflow:participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>]`,
       );
     }
     throw new Error(addUsage());
@@ -235,12 +234,7 @@ async function handleRun(tokens, cwd) {
       : "empty — no session transcript stashed for this workspace (are the plugin hooks running?)";
   }
 
-  // Per-call tools override: `--rw` is shorthand for workspace-write, or `--tools <policy>` for an
-  // exact policy. The stored policy is the default; an explicit flag makes this one run write-capable
-  // without a second roster entry. An invalid --tools value throws (validated downstream).
-  const toolsOverride = parsed.flags.rw === true ? "workspace-write" : stringFlag(parsed.flags.tools ?? parsed.flags.toolsPolicy);
-  const effective = participantForKind(participant, "ask", toolsOverride);
-  const packet = await createPacket({ cwd, participant: effective, kind: "ask", task: prompt, extraContext: stringFlag(parsed.flags.context), handoff });
+  const packet = await createPacket({ cwd, participant, kind: "ask", task: prompt, extraContext: stringFlag(parsed.flags.context), handoff });
   // PRIMARY observability path: streaming is ALWAYS on — the thinking must stay visible, never run a
   // participant without it (--stream/--no-stream are accepted but no longer gate this). Render
   // normalized events to stdout as they arrive so the lead relays the thinking / tool calls / answer
@@ -257,7 +251,7 @@ async function handleRun(tokens, cwd) {
       if (line) { process.stdout.write(`${inDelta ? "\n" : ""}${line}\n`); inDelta = false; }
     }
     : undefined;
-  const result = await runParticipant({ cwd, participant: effective, packet, kind: "ask", onEvent });
+  const result = await runParticipant({ cwd, participant, packet, kind: "ask", onEvent });
   result.handoffSummary = handoffSummary;
 
   if (inDelta) process.stdout.write("\n"); // a trailing pi reasoning delta shouldn't butt against the final answer header
@@ -274,7 +268,7 @@ async function handleRun(tokens, cwd) {
 export function parseRunOptions(tokens) {
   const positional = [];
   const flags = {};
-  const valueFlags = new Set(["tools", "toolsPolicy", "context", "prompt", "prompt-file", "handoff-file", "image"]);
+  const valueFlags = new Set(["context", "prompt", "prompt-file", "handoff-file", "image"]);
   const booleanFlags = new Set(["stream", "no-stream", "json", "rw", "handoff", "no-handoff"]);
   // Repeatable flags collect into an array: `--image a.png --image b.png` → ["a.png", "b.png"].
   const multiValueFlags = new Set(["image"]);
@@ -373,8 +367,8 @@ function flagBool(flags, name) {
 }
 
 const PRESET_OVERRIDE_FLAGS = ["name", "id", "cwd", "description"];
-const CUSTOM_ADD_FLAGS = ["name", "id", "kind", "model", "provider", "effort", "thinking", "tools", "toolsPolicy", "skills", "skillsPolicy", "agent", "cwd", "maxTurns", "description"];
-const CUSTOM_SHAPE_FLAGS = ["kind", "model", "provider", "effort", "thinking", "tools", "toolsPolicy", "skills", "skillsPolicy", "agent", "maxTurns"];
+const CUSTOM_ADD_FLAGS = ["name", "id", "kind", "model", "provider", "effort", "thinking", "skills", "skillsPolicy", "agent", "cwd", "maxTurns", "description"];
+const CUSTOM_SHAPE_FLAGS = ["kind", "model", "provider", "effort", "thinking", "skills", "skillsPolicy", "agent", "maxTurns"];
 
 function assertAllowedFlags(flags, allowed, context) {
   const allowedSet = new Set(allowed);
@@ -407,7 +401,6 @@ function customParticipantInput(name, flags) {
     provider: flags.provider,
     effort: flags.effort,
     thinking: flags.thinking,
-    toolsPolicy: flags.tools ?? flags.toolsPolicy,
     skillsPolicy: flags.skills ?? flags.skillsPolicy,
     agent: flags.agent,
     cwd: flags.cwd,
@@ -421,7 +414,7 @@ function addUsage() {
     "Usage:",
     "  /consensflow:participants add <preset> [--name <name>]   # from a preset, optionally renamed",
     "  /consensflow:participants add all                         # every preset",
-    "  /consensflow:participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--thinking <t>] [--tools <workspace-write|full-auto>] [--cwd <subdir>]",
+    "  /consensflow:participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>] [--thinking <t>] [--cwd <subdir>]",
     "",
     `Presets: ${listPresetIds().join(", ")}`,
   ].join("\n");
@@ -442,7 +435,7 @@ function formatParticipants(participants, cwd = process.cwd()) {
       "/consensflow:participants add zeus                      # add a preset",
       "/consensflow:participants add zeus --name Deepreview    # preset backend, custom name",
       "/consensflow:participants add all                       # every preset",
-      "/consensflow:participants add --name Builder --kind codex --model gpt-5.6-sol --tools workspace-write",
+      "/consensflow:participants add --name Builder --kind codex --model gpt-5.6-sol",
       "```",
     ].join("\n");
   }
@@ -488,10 +481,7 @@ function formatParticipantLine(p) {
   const cwd = p.cwd ? ` cwd=${p.cwd}` : "";
   const skills = p.kind === "pi" ? ` skills=${p.skillsPolicy ?? "default"}` : "";
   const preset = p.preset ? ` preset=${p.preset}` : "";
-  // workspace-write is the quiet default; only surface the explicit full-auto escalation.
-  const policy = effectiveToolsPolicy(p);
-  const access = policy === "full-auto" ? ` access=full-auto` : "";
-  const head = `- @${p.id} (${p.kind}${model}${effort}${cwd}${skills}${preset})${access}`;
+  const head = `- @${p.id} (${p.kind}${model}${effort}${cwd}${skills}${preset})`;
   return p.description ? `${head}\n    ${p.description}` : head;
 }
 
@@ -531,7 +521,7 @@ Manage participants (shared across Claude Code and Pi, ${participantsPath(proces
 /consensflow:participants add zeus --name Deepreview    # preset backend, your own name
 /consensflow:participants add all                       # every preset
 /consensflow:participants add --name Builder --kind codex --model gpt-5.6-sol --effort high \\
-    --tools workspace-write                             # fully custom, write-capable
+                                # fully custom, write-capable
 /consensflow:participants show @zeus
 /consensflow:participants remove @zeus
 /consensflow:status                                     # roster + latest run
@@ -539,14 +529,12 @@ Manage participants (shared across Claude Code and Pi, ${participantsPath(proces
 \`\`\`
 
 For the lead (via the Bash tool), the CLI subcommands are \`status\` | \`doctor\` |
-\`participants list|presets|add|show|remove|sync\` | \`run @name <prompt>\`, with run flags
-\`--tools workspace-write|full-auto\` | \`--prompt <text>\` |
+\`participants list|presets|add|show|remove|sync\` | \`run @name <prompt>\`, with run flags \`--prompt <text>\` |
 \`--prompt-file <file>\` | \`--context <note>\` | \`--no-handoff\` | \`--image <path>\` (image participants) | \`--json\`.
 
 Rules:
 
 - Send to one participant at a time.
-- Participants run as standard read-write CLI calls (workspace-write by default) — like running the CLI yourself, they can edit files and run commands. \`--tools full-auto\` escalates to bypass the workspace sandbox.
 - One-shot: participants do not remember previous calls; each call re-sends the current session handoff.
 - The current Claude Code session remains the lead and decides what to implement.
 `;

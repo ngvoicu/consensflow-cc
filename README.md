@@ -20,7 +20,6 @@ The whole idea in five bullets:
 
 - **Participant** = a named *(agent + model)* combo. Configure once, reuse from any project. The roster is **shared across both tools** at `~/.consensflow/participants.json` — set it up once, use it from pi and cc.
 - **One at a time.** `@zeus @gaia …` is rejected — ask one, read, then ask the next.
-- **Standard read-write by default.** A participant runs as a normal CLI call — exactly like running that agent yourself — so by default it can read, edit files, and run commands, confined to the project workspace (`workspace-write`). The lead still decides whether to keep its changes. `--tools full-auto` is the only escalation; it bypasses the engine's sandbox/approval checks.
 - **One-shot, but context-aware.** Each call is fresh (no memory of past calls), yet it always receives the current session handoff — *including earlier participants' answers* — so the 2nd agent you ask can build on the 1st.
 - **The lead can ask too — and asks before applying.** Claude Code will consult a participant on its own initiative when a second opinion would help, then report back and get your go-ahead before applying anything — unless you pre-authorized it.
 
@@ -38,7 +37,7 @@ Claude (the lead) executes via the Bash tool:
    ▼
 cf.mjs builds a "packet" for @zeus:
    • who @zeus is        (claude-code · claude-opus-5 · max)
-   • mode line           (workspace-write by default — or full-auto if you escalated)
+   • mode line          
    • handoff             (a snapshot of THIS session, from the transcript stash the hooks maintain)
    • your question
    ▼
@@ -120,7 +119,6 @@ Or fully custom (any model string the engine accepts — values pass through ver
 /consensflow:participants add --name Builder --kind opencode --model openrouter/moonshotai/kimi-k3 --tools workspace-write
 ```
 
-> **Default vs full-auto.** By default a participant runs read-write, confined to the project workspace (`workspace-write`) — it can read, plan, critique, edit files, and run commands, just like running the agent yourself. To remove that confinement and bypass the engine's sandbox/approval checks, pass `--tools full-auto` when creating it, or use it on a single run.
 
 Config lives in the **shared** roster `~/.consensflow/participants.json` — used by both consensflow-cc and consensflow-pi, so a participant added in one is immediately available in the other. There are no per-tool config roots. If this shared file is missing but an older per-tool roster exists at `~/.consensflow/consensflow-cc/participants.json` or `~/.consensflow/consensflow-pi/participants.json`, ConsensFlow migrates those entries into the shared file once.
 
@@ -152,7 +150,6 @@ The answer is relayed inline. Every run is saved under the ConsensFlow home — 
 
 **Watch it work live:** routed `@name` prompts and explicit `/consensflow:cf` participant runs always run in the foreground, and the participant's thinking, tool calls, and answer render to stdout as they arrive — the live reasoning/tool/answer trail streams automatically (no flag needed). Always run participant calls in the FOREGROUND, NEVER in the background or detached; this is non-optional — the lead must not detach the run or summarize the trail away (the one exception is an explicit user request for `--json` machine output). If you invoke the CLI manually (`cf run @name <prompt>`), keep the run in the foreground; streaming is on by default either way. The parsed final answer is always printed after the child exits too, so runs end with a durable reply section, and every run writes `transcript.md` as a durability backstop. If a run ends without a final answer you get the bounded trail under a clear header — never a raw event dump. cf never caps a run — runs are unbounded; the only limit is the lead's Bash tool timeout.
 
-Since a consult can modify files, review what changed yourself (e.g. `git status` / `git diff` in your repo) before keeping it — the lead decides whether to keep or build on a participant's changes. **Per-call escalation:** add `--tools full-auto` to lift the workspace confinement on only that run — no second roster entry needed.
 
 ### The handoff — what a participant actually sees
 
@@ -202,15 +199,13 @@ cf status                        # participants + session stash + latest run
 cf doctor                        # which engine CLIs are installed
 cf participants presets|list|show @name|remove @name
 cf participants add <preset>|all|--name … --kind … --model …
-cf run @name <prompt> [--tools workspace-write|full-auto] [--prompt-file f] [--context note] [--no-handoff] [--json]
+cf run @name <prompt> [--prompt-file f] [--context note] [--no-handoff] [--json]
 #   flags may go before or after the prompt; the live reasoning/tool/answer trail streams automatically (no flag needed)
-#   runs are workspace-write by default; --tools full-auto escalates (bypasses sandbox/approval)
 ```
 
 ## Safety model
 
 - **Isolated & one-shot:** each participant runs in its own subprocess, started in your workspace (a `--cwd` that escapes it is rejected before launch, realpath-checked). No memory between calls.
-- **Workspace confinement by default:** participants run with the engine's `workspace-write` policy — read, edit, and run commands, but scoped to the project workspace. `--tools full-auto` is the only escalation and lifts that confinement, bypassing the engine's sandbox/approval checks; use it deliberately.
 - **No recursion:** every child gets `CONSENSFLOW_CHILD=1` — hooks and the CLI bail inside it, so a `claude` child that loads this plugin does nothing with it. Pi children run `--no-extensions`. (`--bare` is deliberately not used on claude children: it forbids OAuth/keychain auth and would break subscription-login participants.)
 - **Billing guard:** `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` are stripped from claude/codex children so runs stay on your subscription logins.
 - **You're always the lead.** ConsensFlow routes your question and shows you the answer — Claude summarizes and asks before applying anything, unless you've already told it to proceed.

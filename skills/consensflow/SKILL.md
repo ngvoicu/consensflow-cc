@@ -35,8 +35,6 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @zeus "Review this diff"
 # Write is the default — no flag needed; the approval gate still applies afterward
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @builder "Make the minimal fix"
 
-# Escalate past the workspace sandbox / approval checks (danger): full-auto
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @builder "Make the minimal fix" --tools full-auto
 
 # Image generation with optional reference image(s) (--image is repeatable; image participants only)
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @pygmalion "A watercolor of this house at sunset" --image /tmp/house.png
@@ -49,7 +47,6 @@ Important run flags (flags may appear before or after the prompt/ref; `--prompt-
 
 - `--context <note>` — focused lead brief in addition to the auto-included handoff.
 - `--no-handoff` — skip the session handoff.
-- `--tools workspace-write|full-auto` — `workspace-write` is the default; `full-auto` bypasses the engine's sandbox/approval checks (danger). Does not mutate the roster.
 - `--image <path>` — reference image for an `image` participant; repeatable for multiple references. Ignored by text participants.
 - `--json` — print full run metadata instead of just the human answer.
 
@@ -132,20 +129,18 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants list
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants presets
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add <preset> [--name <name>] [--cwd <subdir>]
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add all
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>|--thinking <t>] [--tools workspace-write|full-auto] [--cwd <subdir>]
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants add --name <name> --kind <pi|claude-code|codex|opencode|image> --model <model> [--effort <e>|--thinking <t>] [--cwd <subdir>]
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants show @name
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants remove @name
 node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" participants sync [--dry-run]   # re-resolve preset-backed participants against the current catalog
-node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @name <prompt> [--tools workspace-write|full-auto] [--prompt-file <file>] [--context <note>] [--no-handoff] [--image <path> …] [--json]
+node "${CLAUDE_PLUGIN_ROOT}/bin/cf.mjs" run @name <prompt> [--prompt-file <file>] [--context <note>] [--no-handoff] [--image <path> …] [--json]
 ```
 
 User-facing slash commands are thin wrappers around that CLI: `/consensflow:cf`, `/consensflow:status`, `/consensflow:doctor`, `/consensflow:presets`, and `/consensflow:participants …`.
 
-## Tools policy: read-write by default, full-auto is the escalation
 
-- **Default and presets:** read-write, confined to the project workspace (`workspace-write`). Participants can read, plan, critique, explain, propose code, edit files, and run commands — exactly like running the CLI yourself.
+- **Default and presets:** read-write, confined to the project workspace. Participants can read, plan, critique, explain, propose code, edit files, and run commands — exactly like running the CLI yourself.
 - **`--tools workspace-write`:** redundant; it just restates the default. No flag is needed to let a participant write.
-- **`--tools full-auto` (danger):** the only real escalation. It bypasses the engine's sandbox and approval checks, so the participant is no longer confined to the workspace. Use it only when explicitly needed, and make it obvious in the command history.
 - **After any run:** run your own inspection (`git status`, `git diff`, relevant tests as needed), summarize what the participant changed, give your recommendation, and wait for user approval before keeping/building on/committing the changes unless the user pre-authorized that exact action.
 
 ## How the user asks
@@ -155,7 +150,6 @@ When the user's prompt addresses one configured participant — `@zeus What's th
 ## Invariants
 
 - **One at a time.** Send to exactly one participant per call. Never fan out to several participants automatically. If the user names several, ask which one first, or ask one and wait for its answer before asking the next.
-- **Read-write by default.** A participant runs with read-write tools confined to the project workspace — it can edit files and run commands with no extra flag. `--tools full-auto` is the only escalation; it bypasses the engine's sandbox/approval checks.
 - **One-shot, no memory.** Each call is fresh. Continuity comes only from the handoff (re-sent each time), which already includes earlier participant replies — so a later participant can build on an earlier one (cross-pollination). For a genuinely *independent* opinion, ask that participant **first**, before others have replied — otherwise its handoff carries the prior answers and colors it.
 - **Foreground is non-optional.** Always run participant calls in the FOREGROUND, NEVER in the background or detached; the live reasoning/tool/answer trail streams automatically (no flag needed). The lead must not swap it for `--json` or summarize the streamed trail away. The one exception is an explicit user request for JSON output.
 - **The lead is always the decision-maker.** ConsensFlow routes a prompt and returns an answer; it never implements anything on its own. Acting on any answer goes through the gate above.

@@ -314,6 +314,8 @@ async function makeFakeEngines(dir) {
       "    OPENCODE_PERMISSION: process.env.OPENCODE_PERMISSION ?? null,",
       "    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? null,",
       "    OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? null,",
+      "    CMUX_SOCKET_CAPABILITY: process.env.CMUX_SOCKET_CAPABILITY ?? null,",
+      "    CMUX_CLAUDE_HOOK_CMUX_BIN: process.env.CMUX_CLAUDE_HOOK_CMUX_BIN ?? null,",
       "  },",
       "};",
       `fs.writeFileSync(path.join(process.env.FAKE_ENGINE_OUT, ${JSON.stringify(name)} + ".json"), JSON.stringify(dump, null, 2));`,
@@ -337,6 +339,9 @@ async function runCf(args, { ws, dir, fake }, extraEnv = {}) {
       // Billing guard probe: these must NOT reach claude/codex children.
       ANTHROPIC_API_KEY: "leak-test",
       OPENAI_API_KEY: "leak-test",
+      // cmux control-socket guard probe: the bearer token must NOT reach any child.
+      CMUX_SOCKET_CAPABILITY: "leak-test",
+      CMUX_CLAUDE_HOOK_CMUX_BIN: "leak-test",
       ...extraEnv,
     },
   });
@@ -387,6 +392,8 @@ test("e2e: all four engines run, parse, and persist artifacts through the real s
 
       const dump = JSON.parse(await readFile(path.join(fake.out, `${engine}.json`), "utf8"));
       assert.equal(dump.env.CONSENSFLOW_CHILD, "1", `${engine}: child marker reaches the subprocess`);
+      assert.equal(dump.env.CMUX_SOCKET_CAPABILITY, null, `${engine}: cmux socket token stripped`);
+      assert.equal(dump.env.CMUX_CLAUDE_HOOK_CMUX_BIN, null, `${engine}: cmux hook binary path stripped`);
       const packetSeen = engine === "opencode" ? dump.packetFromFile : dump.stdin;
       assert.ok(String(packetSeen ?? "").includes("# ConsensFlow Packet"), `${engine}: packet delivered`);
     }
@@ -490,13 +497,13 @@ test("e2e: runParticipant writes a transcript.md backstop (event trail) and sets
   });
 });
 
-test("e2e: a default run is already read-write; --rw is accepted, --tools full-auto escalates [STRM-25]", async () => {
+test("e2e: a run is read-write, and no bypass flag can be requested [STRM-25]", async () => {
   await withTempDir(async (dir) => {
     const ws = path.join(dir, "ws");
     await mkdir(ws, { recursive: true });
     const fake = await makeFakeEngines(dir);
     const ctx = { ws, dir, fake };
-    await runCf(["participants", "add", "zeus"], ctx); // claude-code, stored workspace-write
+    await runCf(["participants", "add", "zeus"], ctx); // claude-code
 
     // Default run: write capability already reaches the engine — no flag needed, no deny list.
     await runCf(["run", "@zeus", "go"], ctx);
@@ -505,17 +512,12 @@ test("e2e: a default run is already read-write; --rw is accepted, --tools full-a
     assert.match(allowed, /Edit/, "default run grants Edit");
     assert.match(allowed, /Write/, "default run grants Write");
     assert.equal(claude.argv.includes("--disallowedTools"), false, "no read-only deny list");
-    assert.equal(claude.argv.includes("--dangerously-skip-permissions"), false, "default is not full-auto");
+    assert.equal(claude.argv.includes("--dangerously-skip-permissions"), false, "no bypass flag");
 
-    // --rw is accepted and equivalent to the default workspace-write (no escalation).
-    await runCf(["run", "@zeus", "go", "--rw"], ctx);
-    claude = JSON.parse(await readFile(path.join(fake.out, "claude.json"), "utf8"));
-    assert.equal(claude.argv.includes("--dangerously-skip-permissions"), false, "--rw is not an escalation");
-
-    // --tools full-auto reaches the engine's danger flag.
+    // The permission knob is gone: even asking for it changes nothing.
     await runCf(["run", "@zeus", "go", "--tools", "full-auto"], ctx);
     claude = JSON.parse(await readFile(path.join(fake.out, "claude.json"), "utf8"));
-    assert.ok(claude.argv.includes("--dangerously-skip-permissions"), "--tools full-auto reaches the danger flag");
+    assert.equal(claude.argv.includes("--dangerously-skip-permissions"), false, "no escalation exists");
   });
 });
 
