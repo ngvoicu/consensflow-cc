@@ -1,7 +1,13 @@
 > **Merged into [ngvoicu/consensflow](https://github.com/ngvoicu/consensflow) on 2026-08-20.**
 > This repository is archived. Its payload and engine now live in that repo
-> (`hosts/claude` and the shared `hosts/lib`), and it is installed
-> with `npm install -g ngvoicu/consensflow` then `consensflow install claude`.
+> (`hosts/claude` and the shared `hosts/lib`).
+>
+> **Installation is the ConsensFlow app** — download it from that repo's
+> releases, open it, and choose Claude Code. It carries its own runtime, so
+> there is nothing else to install: no npm, no Node. The vocabulary moved on
+> too — what this README calls *participants* are now **agents**, and the
+> CLIs that run them are **harnesses**.
+>
 > History is kept here; changes happen there.
 
 # ConsensFlow CC
